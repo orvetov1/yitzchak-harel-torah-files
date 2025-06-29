@@ -2,25 +2,30 @@
 import React from 'react';
 import Layout from '../components/Layout';
 import PDFList from '../components/PDFList';
+import { usePDFFiles } from '../hooks/usePDFFiles';
 
 const Mikra = () => {
-  // Mock data - in real implementation this would come from database
-  const pdfItems = [
-    {
-      id: '1',
-      title: 'פירוש המקרא - בראשית פרק א׳',
-      description: 'הסבר מפורט על מעשה בראשית על פי פירושי הראשונים',
-      filePath: '/sample.pdf', // This would be actual file path
-      category: 'mikra'
-    },
-    {
-      id: '2',
-      title: 'ביאור המילות והמושגים - ספר שמות',
-      description: 'מילון מקיף למילות קשות ומושגים בספר שמות',
-      filePath: '/sample.pdf',
-      category: 'mikra'
-    }
-  ];
+  const { items, isLoading, error } = usePDFFiles('mikra');
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center hebrew-text">טוען קבצים...</div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center hebrew-text text-red-600">{error}</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -44,7 +49,7 @@ const Mikra = () => {
           </div>
         </div>
 
-        <PDFList items={pdfItems} category="mikra" />
+        <PDFList items={items} category="mikra" />
       </div>
     </Layout>
   );

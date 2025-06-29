@@ -2,18 +2,30 @@
 import React from 'react';
 import Layout from '../components/Layout';
 import PDFList from '../components/PDFList';
+import { usePDFFiles } from '../hooks/usePDFFiles';
 
 const Halakha = () => {
-  // Mock data - in real implementation this would come from database
-  const pdfItems = [
-    {
-      id: '1',
-      title: 'עקרונות פסיקת ההלכה',
-      description: 'מבוא לכללי הוראה ופסיקה בהלכה היהודית',
-      filePath: '/sample.pdf',
-      category: 'halakha'
-    }
-  ];
+  const { items, isLoading, error } = usePDFFiles('halakha');
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center hebrew-text">טוען קבצים...</div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          <div className="text-center hebrew-text text-red-600">{error}</div>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -37,7 +49,7 @@ const Halakha = () => {
           </div>
         </div>
 
-        <PDFList items={pdfItems} category="halakha" />
+        <PDFList items={items} category="halakha" />
       </div>
     </Layout>
   );
