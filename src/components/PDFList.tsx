@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Eye, Download } from 'lucide-react';
 import PDFSkeleton from './PDFSkeleton';
-import LazyPDFViewer from './LazyPDFViewer';
+import PDFViewerModal from './PDFViewerModal';
 
 interface PDFItem {
   id: string;
@@ -31,10 +31,8 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
 
   const handleDownload = async (item: PDFItem) => {
     try {
-      // Use the full URL directly from filePath
       const fileUrl = item.filePath;
       
-      // Try to download via fetch first
       const response = await fetch(fileUrl);
       if (!response.ok) {
         throw new Error('Failed to fetch file');
@@ -51,7 +49,6 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback: open in new tab
       window.open(item.filePath, '_blank');
     }
   };
@@ -118,8 +115,8 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
       </div>
 
       {selectedPDF && (
-        <LazyPDFViewer
-          pdfFileId={selectedPDF.id}
+        <PDFViewerModal
+          pdfUrl={selectedPDF.filePath}
           fileName={selectedPDF.title}
           isOpen={viewerOpen}
           onClose={() => {
