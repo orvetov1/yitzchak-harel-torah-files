@@ -3,13 +3,15 @@ import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 
-// Set up PDF.js worker with better error handling
+// Enhanced PDF.js worker setup with better error handling
 try {
+  // Try local worker first
   pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
   console.log('PDF.js worker set to local file');
 } catch (error) {
-  console.warn('Failed to set local PDF worker, using CDN fallback:', error);
-  pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+  console.warn('Failed to set local PDF worker, using CDN:', error);
+  // Fallback to CDN with exact version match
+  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 }
 
 interface PDFViewerContentProps {
@@ -39,12 +41,12 @@ const PDFViewerContent = ({
 }: PDFViewerContentProps) => {
   if (loading) {
     return (
-      <div className="text-center hebrew-text space-y-4">
+      <div className="text-center hebrew-text space-y-4 p-8">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
         <div className="space-y-2">
-          <div className="hebrew-text text-lg font-medium">טוען קובץ PDF...</div>
+          <div className="hebrew-text text-lg font-medium">מכין את הקובץ לקריאה...</div>
           <div className="hebrew-text text-sm text-muted-foreground">
-            אנא המתינו, הקובץ נטען
+            אנא המתינו, הקובץ נטען ומעובד
           </div>
         </div>
       </div>
@@ -53,9 +55,9 @@ const PDFViewerContent = ({
 
   if (error) {
     return (
-      <div className="text-center hebrew-text space-y-4">
+      <div className="text-center hebrew-text space-y-4 p-8">
         <div className="text-red-600 text-lg font-medium">{error}</div>
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-2 justify-center flex-wrap">
           <Button 
             variant="outline" 
             onClick={() => window.open(fileUrl, '_blank')}
@@ -73,6 +75,9 @@ const PDFViewerContent = ({
             </Button>
           )}
         </div>
+        <p className="hebrew-text text-xs text-muted-foreground">
+          אם הבעיה נמשכת, נסה להוריד את הקובץ ולפתוח אותו במחשב שלך
+        </p>
       </div>
     );
   }
@@ -86,9 +91,18 @@ const PDFViewerContent = ({
         onLoadProgress={onDocumentLoadProgress}
         loading={null}
         options={{
-          cMapUrl: `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
+          // Enhanced options for better PDF support
+          cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
           cMapPacked: true,
-          standardFontDataUrl: `//cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+          standardFontDataUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+          // Support for encrypted/protected PDFs
+          useSystemFonts: true,
+          // Better handling of various PDF types
+          verbosity: 0, // Reduce console noise
+          maxImageSize: 1024 * 1024 * 16, // 16MB max image size
+          disableFontFace: false,
+          disableRange: false,
+          disableStream: false,
         }}
       >
         <Page
@@ -96,7 +110,10 @@ const PDFViewerContent = ({
           scale={scale}
           onLoadStart={() => setPageLoading(true)}
           onLoadSuccess={() => setPageLoading(false)}
-          onLoadError={() => setPageLoading(false)}
+          onLoadError={(error) => {
+            console.error('Page load error:', error);
+            setPageLoading(false);
+          }}
           loading={
             <div className="p-8 text-center hebrew-text flex items-center justify-center min-h-[400px]">
               <div className="space-y-2">
@@ -105,6 +122,8 @@ const PDFViewerContent = ({
               </div>
             </div>
           }
+          renderTextLayer={true}
+          renderAnnotationLayer={true}
         />
       </Document>
     </div>

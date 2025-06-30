@@ -22,6 +22,8 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     loadingProgress,
     error,
     pageLoading,
+    fileSize,
+    waitingForUser,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,
@@ -32,7 +34,8 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     zoomOut,
     setPage,
     cancelLoading,
-    retryLoading
+    retryLoading,
+    continueWaiting
   } = usePDFViewer(fileUrl, isOpen);
 
   const handleDownload = async () => {
@@ -49,6 +52,8 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
+      // Fallback to opening in new tab
+      window.open(fileUrl, '_blank');
     }
   };
 
@@ -111,8 +116,11 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
 
         {loading && (
           <PDFViewerProgress 
-            loadingProgress={loadingProgress} 
+            loadingProgress={loadingProgress}
+            fileSize={fileSize}
+            waitingForUser={waitingForUser}
             onCancel={handleCancel}
+            onContinue={continueWaiting}
           />
         )}
 
