@@ -4,9 +4,7 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Eye, Download } from 'lucide-react';
 import PDFSkeleton from './PDFSkeleton';
-import PDFViewer from './PDFViewer';
 import LazyPDFViewer from './LazyPDFViewer';
-import { supabase } from '@/integrations/supabase/client';
 
 interface PDFItem {
   id: string;
@@ -33,11 +31,15 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
 
   const handleDownload = async (item: PDFItem) => {
     try {
-      const { data } = supabase.storage
-        .from('pdf-files')
-        .getPublicUrl(item.filePath);
-
-      const response = await fetch(data.publicUrl);
+      // Use the full URL directly from filePath
+      const fileUrl = item.filePath;
+      
+      // Try to download via fetch first
+      const response = await fetch(fileUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch file');
+      }
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -49,19 +51,9 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback to opening in new tab
-      const { data } = supabase.storage
-        .from('pdf-files')
-        .getPublicUrl(item.filePath);
-      window.open(data.publicUrl, '_blank');
+      // Fallback: open in new tab
+      window.open(item.filePath, '_blank');
     }
-  };
-
-  const getFileUrl = (item: PDFItem): string => {
-    const { data } = supabase.storage
-      .from('pdf-files')
-      .getPublicUrl(item.filePath);
-    return data.publicUrl;
   };
 
   if (isLoading) {
@@ -125,7 +117,6 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
         ))}
       </div>
 
-      {/* Use LazyPDFViewer for new split-page functionality */}
       {selectedPDF && (
         <LazyPDFViewer
           pdfFileId={selectedPDF.id}

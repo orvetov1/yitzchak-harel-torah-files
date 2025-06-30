@@ -1,7 +1,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from './ui/button';
-import { ChevronLeft, ChevronRight, Download, X, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, X, RotateCcw, ExternalLink } from 'lucide-react';
 import { usePDFPages } from '../hooks/usePDFPages';
 
 interface LazyPDFViewerProps {
@@ -15,7 +15,6 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
   const { pages, fileInfo, isLoading, error, getPageUrl, retryProcessing } = usePDFPages(pdfFileId);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [scale, setScale] = useState(1.0);
-  const [loadedPages, setLoadedPages] = useState<Set<number>>(new Set());
 
   const currentPage = useMemo(() => {
     return pages[currentPageIndex] || null;
@@ -24,10 +23,6 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
   const currentPageUrl = useMemo(() => {
     return currentPage ? getPageUrl(currentPage) : null;
   }, [currentPage, getPageUrl]);
-
-  const handlePageLoad = useCallback((pageIndex: number) => {
-    setLoadedPages(prev => new Set([...prev, pageIndex]));
-  }, []);
 
   const goToPrevPage = useCallback(() => {
     setCurrentPageIndex(prev => Math.max(0, prev - 1));
@@ -56,6 +51,12 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
       if (currentPageUrl) {
         window.open(currentPageUrl, '_blank');
       }
+    }
+  };
+
+  const handleOpenInNewTab = () => {
+    if (currentPageUrl) {
+      window.open(currentPageUrl, '_blank');
     }
   };
 
@@ -105,10 +106,16 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center hebrew-text space-y-4 p-8">
               <div className="text-red-600 text-lg font-medium">{error}</div>
-              <Button onClick={retryProcessing} className="hebrew-text">
-                <RotateCcw size={16} className="mr-2" />
-                נסה שוב
-              </Button>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={retryProcessing} className="hebrew-text">
+                  <RotateCcw size={16} className="mr-2" />
+                  נסה שוב
+                </Button>
+                <Button variant="outline" onClick={handleOpenInNewTab} className="hebrew-text">
+                  <ExternalLink size={16} className="mr-2" />
+                  פתח בטאב חדש
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -141,10 +148,16 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
                   </div>
                 )}
               </div>
-              <Button onClick={retryProcessing} variant="outline" className="hebrew-text">
-                <RotateCcw size={16} className="mr-2" />
-                בדוק מחדש
-              </Button>
+              <div className="flex gap-2 justify-center">
+                <Button onClick={retryProcessing} variant="outline" className="hebrew-text">
+                  <RotateCcw size={16} className="mr-2" />
+                  בדוק מחדש
+                </Button>
+                <Button variant="outline" onClick={handleOpenInNewTab} className="hebrew-text">
+                  <ExternalLink size={16} className="mr-2" />
+                  פתח בטאב חדש
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -152,7 +165,7 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
     );
   }
 
-  // Main viewer
+  // Main viewer - use embed instead of iframe to avoid Chrome blocking
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm">
       <div className="flex flex-col h-full">
@@ -165,6 +178,9 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={handleOpenInNewTab}>
+              <ExternalLink size={16} />
+            </Button>
             <Button variant="outline" onClick={handleDownload}>
               <Download size={16} />
             </Button>
@@ -204,17 +220,35 @@ const LazyPDFViewer = ({ pdfFileId, fileName, isOpen, onClose }: LazyPDFViewerPr
         {/* PDF Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
           {currentPageUrl ? (
-            <div className="bg-white shadow-lg" style={{ transform: `scale(${scale})` }}>
-              <iframe
-                src={currentPageUrl}
-                className="w-[800px] h-[600px] border-0"
-                onLoad={() => handlePageLoad(currentPageIndex)}
-                title={`עמוד ${currentPageIndex + 1}`}
+            <div className="bg-white shadow-lg max-w-full max-h-full" style={{ transform: `scale(${scale})` }}>
+              {/* Try embed first, fallback to object, then iframe */}
+              <embed
+                src={`${currentPageUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+                type="application/pdf"
+                className="w-[800px] h-[600px] max-w-full max-h-full"
+                onError={() => {
+                  // If embed fails, try opening in new tab
+                  console.warn('PDF embed failed, opening in new tab');
+                  window.open(currentPageUrl, '_blank');
+                }}
               />
+              <noscript>
+                <div className="text-center hebrew-text p-8">
+                  <p className="mb-4">לא ניתן להציג את הקובץ בדפדפן זה</p>
+                  <Button onClick={handleOpenInNewTab} className="hebrew-text">
+                    <ExternalLink size={16} className="mr-2" />
+                    פתח בטאב חדש
+                  </Button>
+                </div>
+              </noscript>
             </div>
           ) : (
             <div className="text-center hebrew-text">
-              <div className="text-muted-foreground">אין עמוד לתצוגה</div>
+              <div className="text-muted-foreground mb-4">אין עמוד לתצוגה</div>
+              <Button onClick={handleOpenInNewTab} variant="outline" className="hebrew-text">
+                <ExternalLink size={16} className="mr-2" />
+                פתח בטאב חדש
+              </Button>
             </div>
           )}
         </div>
