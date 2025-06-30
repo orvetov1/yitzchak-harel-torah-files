@@ -3,6 +3,7 @@ import { useRef, useCallback } from 'react';
 
 export const usePDFProgressSimulation = () => {
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const simulationStartTime = useRef<number>(0);
 
   const startProgressSimulation = useCallback((
     setLoadingProgress: (progress: number) => void,
@@ -10,19 +11,28 @@ export const usePDFProgressSimulation = () => {
   ) => {
     let progress = 0;
     let step = 0;
+    simulationStartTime.current = Date.now();
     
     const updateProgress = () => {
       step++;
+      const elapsedSeconds = (Date.now() - simulationStartTime.current) / 1000;
       
-      // More realistic simulation - slower and stops at 90%
-      if (step <= 3) {
-        progress += 15; // 0->45% in first 3 steps (1.5s)
-      } else if (step <= 6) {
-        progress += 10; // 45->75% in next 3 steps (1.5s)
-      } else if (step <= 10) {
-        progress += 3; // 75->87% in next 4 steps (2s)
+      // More realistic progression based on time
+      if (elapsedSeconds < 2) {
+        progress = Math.min(progress + 8, 25); // Fast start to 25%
+        setLoadingPhase('מתחיל הורדה...');
+      } else if (elapsedSeconds < 5) {
+        progress = Math.min(progress + 5, 50); // Steady to 50%
+        setLoadingPhase('מוריד תוכן...');
+      } else if (elapsedSeconds < 8) {
+        progress = Math.min(progress + 3, 70); // Slower to 70%
+        setLoadingPhase('מעבד נתונים...');
+      } else if (elapsedSeconds < 12) {
+        progress = Math.min(progress + 2, 85); // Even slower to 85%
+        setLoadingPhase('מכין לתצוגה...');
       } else {
-        progress += 0.5; // Slow crawl to 90% max
+        progress = Math.min(progress + 0.5, 90); // Very slow crawl to 90%
+        setLoadingPhase('מסיים עיבוד...');
       }
       
       if (progress > 90) {
@@ -30,30 +40,20 @@ export const usePDFProgressSimulation = () => {
       }
       
       setLoadingProgress(progress);
+      console.log(`📈 Simulated progress: ${Math.round(progress)}% after ${elapsedSeconds.toFixed(1)}s`);
       
-      // Update phase based on simulated progress
-      if (progress < 30) {
-        setLoadingPhase('מוריד קובץ...');
-      } else if (progress < 70) {
-        setLoadingPhase('מעבד תוכן...');
-      } else {
-        setLoadingPhase('מסיים עיבוד...');
-      }
-      
-      console.log(`📈 Simulated progress: ${Math.round(progress)}%`);
-      
-      if (progress < 90) {
-        progressIntervalRef.current = setTimeout(updateProgress, 500); // Slower simulation
+      if (progress < 90 && elapsedSeconds < 15) {
+        progressIntervalRef.current = setTimeout(updateProgress, 800); // Slower, more realistic updates
       }
     };
     
-    // Start simulation after a brief delay
-    progressIntervalRef.current = setTimeout(updateProgress, 200);
+    // Start simulation immediately
+    updateProgress();
   }, []);
 
   const clearProgressSimulation = useCallback(() => {
     if (progressIntervalRef.current) {
-      clearInterval(progressIntervalRef.current);
+      clearTimeout(progressIntervalRef.current);
       progressIntervalRef.current = null;
     }
   }, []);

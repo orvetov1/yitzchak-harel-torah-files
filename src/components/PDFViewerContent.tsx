@@ -2,6 +2,7 @@
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
+import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
@@ -39,6 +40,24 @@ const PDFViewerContent = ({
 }: PDFViewerContentProps) => {
   const { analyzeComplexity, getOptimizedSettings } = usePDFComplexity();
 
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(fileUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `document.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      window.open(fileUrl, '_blank');
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center hebrew-text space-y-4 p-8">
@@ -55,29 +74,49 @@ const PDFViewerContent = ({
 
   if (error) {
     return (
-      <div className="text-center hebrew-text space-y-4 p-8">
-        <div className="text-red-600 text-lg font-medium">{error}</div>
-        <div className="flex gap-2 justify-center flex-wrap">
-          <Button 
-            variant="outline" 
-            onClick={() => window.open(fileUrl, '_blank')}
-            className="hebrew-text"
-          >
-            פתח בטאב חדש
-          </Button>
-          {onRetry && (
+      <div className="text-center hebrew-text space-y-6 p-8 max-w-md mx-auto">
+        <div className="space-y-3">
+          <div className="text-red-600 text-lg font-medium">{error}</div>
+          <div className="text-sm text-muted-foreground">
+            הקובץ עלול להיות פגום, גדול מדי, או שיש בעיה בחיבור האינטרנט
+          </div>
+        </div>
+        
+        <div className="bg-accent/20 border border-accent rounded-lg p-4">
+          <div className="hebrew-text text-sm font-medium mb-3">אפשרויות לפתרון:</div>
+          <div className="flex flex-col gap-2">
             <Button 
               variant="default" 
-              onClick={onRetry}
+              onClick={handleDownload}
               className="hebrew-text"
             >
-              נסה שוב
+              <Download size={16} className="ml-2" />
+              הורד קובץ למחשב
             </Button>
-          )}
+            <Button 
+              variant="outline" 
+              onClick={() => window.open(fileUrl, '_blank')}
+              className="hebrew-text"
+            >
+              <ExternalLink size={16} className="ml-2" />
+              פתח בטאב חדש
+            </Button>
+            {onRetry && (
+              <Button 
+                variant="outline" 
+                onClick={onRetry}
+                className="hebrew-text"
+              >
+                <RefreshCw size={16} className="ml-2" />
+                נסה שוב
+              </Button>
+            )}
+          </div>
         </div>
-        <p className="hebrew-text text-xs text-muted-foreground">
-          אם הבעיה נמשכת, פתח את הקובץ בטאב חדש או הורד אותו למחשב
-        </p>
+        
+        <div className="text-xs text-muted-foreground">
+          אם הבעיה נמשכת, נסה להוריד את הקובץ ולפתוח אותו ביישום PDF במחשב
+        </div>
       </div>
     );
   }

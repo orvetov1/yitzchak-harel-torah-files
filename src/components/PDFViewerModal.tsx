@@ -1,11 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
-import { ChevronLeft, ChevronRight, Download, X, Maximize, Minimize, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
-
-// Set up PDF.js worker using the public path
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+import { ChevronLeft, ChevronRight, Download, X, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
+import { usePDFViewer } from '../hooks/usePDFViewer';
+import PDFViewerContent from './PDFViewerContent';
+import PDFViewerProgress from './PDFViewerProgress';
 
 interface PDFViewerModalProps {
   pdfUrl: string;
@@ -15,22 +14,35 @@ interface PDFViewerModalProps {
 }
 
 const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalProps) => {
-  const [numPages, setNumPages] = useState<number>(0);
-  const [pageNumber, setPageNumber] = useState<number>(1);
-  const [scale, setScale] = useState<number>(1.0);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      setPageNumber(1);
-      setScale(1.0);
-      setError(null);
-      setLoading(true);
-    }
-  }, [isOpen, pdfUrl]);
+  const {
+    numPages,
+    pageNumber,
+    scale,
+    loading,
+    loadingProgress,
+    error,
+    pageLoading,
+    fileSize,
+    waitingForUser,
+    loadingPhase,
+    loadingStage,
+    setPageLoading,
+    onDocumentLoadSuccess,
+    onDocumentLoadError,
+    onDocumentLoadProgress,
+    onProcessingStart,
+    goToPrevPage,
+    goToNextPage,
+    zoomIn,
+    zoomOut,
+    setPage,
+    cancelLoading,
+    retryLoading,
+    continueWaiting
+  } = usePDFViewer(pdfUrl, isOpen);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -75,35 +87,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isFullscreen, pageNumber, numPages, scale]);
-
-  const onDocumentLoadSuccess = ({ numPages }: { numPages: number }) => {
-    setNumPages(numPages);
-    setLoading(false);
-    console.log(`📄 PDF loaded successfully: ${numPages} pages`);
-  };
-
-  const onDocumentLoadError = (error: Error) => {
-    console.error('❌ Error loading PDF:', error);
-    setError('שגיאה בטעינת הקובץ - אנא נסה שוב');
-    setLoading(false);
-  };
-
-  const goToPrevPage = () => {
-    setPageNumber(prev => Math.max(1, prev - 1));
-  };
-
-  const goToNextPage = () => {
-    setPageNumber(prev => Math.min(numPages, prev + 1));
-  };
-
-  const zoomIn = () => {
-    setScale(prev => Math.min(3.0, prev + 0.2));
-  };
-
-  const zoomOut = () => {
-    setScale(prev => Math.max(0.5, prev - 0.2));
-  };
+  }, [isOpen, isFullscreen, goToPrevPage, goToNextPage, zoomIn, zoomOut]);
 
   const toggleFullscreen = async () => {
     if (!containerRef.current) return;
@@ -153,7 +137,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
   const handlePageInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const page = parseInt(event.target.value);
     if (page >= 1 && page <= numPages) {
-      setPageNumber(page);
+      setPage(page);
     }
   };
 
@@ -169,9 +153,14 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
         <div className="bg-white border-b border-border p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <h2 className="hebrew-title text-lg font-semibold">{fileName}</h2>
-            {!loading && !error && (
+            {!loading && !error && numPages > 0 && (
               <span className="hebrew-text text-sm text-muted-foreground">
                 עמוד {pageNumber} מתוך {numPages}
+              </span>
+            )}
+            {fileSize > 0 && (
+              <span className="hebrew-text text-xs text-muted-foreground">
+                ({Math.round(fileSize / 1024)}KB)
               </span>
             )}
           </div>
@@ -188,8 +177,20 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
           </div>
         </div>
 
-        {/* Controls */}
-        {!loading && !error && (
+        {/* Progress Bar - shown during loading */}
+        {(loading || waitingForUser) && (
+          <PDFViewerProgress
+            loadingProgress={loadingProgress}
+            fileSize={fileSize}
+            waitingForUser={waitingForUser}
+            loadingPhase={loadingPhase}
+            onCancel={cancelLoading}
+            onContinue={continueWaiting}
+          />
+        )}
+
+        {/* Controls - shown when PDF is loaded */}
+        {!loading && !error && numPages > 0 && (
           <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
             <Button
               variant="outline"
@@ -232,51 +233,42 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
             <Button variant="outline" onClick={zoomIn} disabled={scale >= 3.0}>
               <ZoomIn size={16} />
             </Button>
+
+            {loadingStage !== 'complete' && (
+              <div className="flex items-center gap-2 ml-4">
+                <div className="hebrew-text text-xs text-muted-foreground">
+                  {loadingStage === 'downloading' && 'מוריד...'}
+                  {loadingStage === 'processing' && 'מעבד...'}
+                  {loadingStage === 'rendering' && 'מכין תצוגה...'}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {/* PDF Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
-          {loading && (
-            <div className="text-center hebrew-text space-y-4">
-              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto"></div>
-              <div className="text-xl font-medium">טוען קובץ PDF...</div>
-            </div>
-          )}
-
-          {error && (
-            <div className="text-center hebrew-text space-y-4">
-              <div className="text-red-600 text-lg font-medium">{error}</div>
-              <Button onClick={handleDownload} variant="outline" className="hebrew-text">
-                <Download size={16} className="mr-2" />
-                הורד קובץ
-              </Button>
-            </div>
-          )}
-
-          {!loading && !error && (
-            <Document
-              file={pdfUrl}
-              onLoadSuccess={onDocumentLoadSuccess}
-              onLoadError={onDocumentLoadError}
-              loading=""
-              error=""
-            >
-              <Page
-                pageNumber={pageNumber}
-                scale={scale}
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
-                className="shadow-lg"
-              />
-            </Document>
-          )}
+          <PDFViewerContent
+            fileUrl={pdfUrl}
+            fileSize={fileSize}
+            pageNumber={pageNumber}
+            scale={scale}
+            loading={loading}
+            error={error}
+            setPageLoading={setPageLoading}
+            onDocumentLoadSuccess={onDocumentLoadSuccess}
+            onDocumentLoadError={onDocumentLoadError}
+            onDocumentLoadProgress={onDocumentLoadProgress}
+            onRetry={retryLoading}
+            onProcessingStart={onProcessingStart}
+          />
         </div>
 
         {/* Footer */}
         <div className="bg-white border-t border-border p-2 text-center">
           <span className="hebrew-text text-xs text-muted-foreground">
             השתמש בחיצים לדפדוף, Ctrl+/- לזום, F11 למסך מלא, ESC לסגירה
+            {pageLoading && ' • טוען עמוד...'}
           </span>
         </div>
       </div>

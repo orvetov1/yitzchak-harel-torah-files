@@ -2,7 +2,7 @@
 import React from 'react';
 import { Progress } from './ui/progress';
 import { Button } from './ui/button';
-import { X, Clock, FileText, Download } from 'lucide-react';
+import { X, Clock, FileText, Download, RefreshCw } from 'lucide-react';
 
 interface PDFViewerProgressProps {
   loadingProgress: number;
@@ -101,6 +101,7 @@ const PDFViewerProgress = ({
                     onClick={onContinue}
                     className="hebrew-text text-xs"
                   >
+                    <RefreshCw size={14} className="ml-1" />
                     המשך המתנה
                   </Button>
                 )}
