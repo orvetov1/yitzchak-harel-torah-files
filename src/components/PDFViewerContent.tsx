@@ -3,9 +3,9 @@ import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 
-// Simple and reliable PDF.js worker setup
+// Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-console.log('PDF.js worker configured to use local file');
+console.log('PDF.js worker configured to use local file (no external CDN)');
 
 interface PDFViewerContentProps {
   fileUrl: string;
@@ -39,7 +39,7 @@ const PDFViewerContent = ({
         <div className="space-y-2">
           <div className="hebrew-text text-xl font-medium">מכין את הקובץ...</div>
           <div className="hebrew-text text-sm text-muted-foreground">
-            אנא המתינו בסבלנות
+            טוען ממשאבים מקומיים
           </div>
         </div>
       </div>
@@ -84,29 +84,29 @@ const PDFViewerContent = ({
         onLoadProgress={onDocumentLoadProgress}
         loading={null}
         options={{
-          // Optimized settings for faster loading
-          cMapUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/cmaps/`,
-          cMapPacked: true,
-          standardFontDataUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
-          useSystemFonts: true,
+          // Optimized settings for local-only resources
           verbosity: 0,
-          maxImageSize: 1024 * 1024 * 8, // 8MB max image size
+          maxImageSize: 1024 * 1024 * 4, // 4MB max image size - reduced from 8MB
           disableFontFace: false,
           disableRange: false,
           disableStream: false,
-          // Enable better caching
-          enableXfa: true,
+          // Disable external CDN dependencies for better reliability
+          cMapUrl: '',
+          cMapPacked: false,
+          standardFontDataUrl: '',
+          useSystemFonts: true,
+          enableXfa: false, // Disable XFA to avoid potential external dependencies
         }}
       >
         <Page
           pageNumber={pageNumber}
           scale={scale}
           onLoadStart={() => {
-            console.log(`Loading page ${pageNumber}`);
+            console.log(`Loading page ${pageNumber} with local resources`);
             setPageLoading(true);
           }}
           onLoadSuccess={() => {
-            console.log(`Page ${pageNumber} loaded successfully`);
+            console.log(`Page ${pageNumber} loaded successfully from local resources`);
             setPageLoading(false);
           }}
           onLoadError={(error) => {

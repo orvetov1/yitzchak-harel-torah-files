@@ -35,7 +35,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   }, []);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    console.log('PDF loaded successfully with', numPages, 'pages');
+    console.log('PDF loaded successfully with', numPages, 'pages (using local worker)');
     setNumPages(numPages);
     setLoading(false);
     setLoadingProgress(100);
@@ -60,7 +60,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   }, [fileUrl]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('Error loading PDF:', error);
+    console.error('Error loading PDF with local worker:', error);
     setError('שגיאה בטעינת הקובץ - אנא נסה שוב');
     setLoading(false);
     setLoadingProgress(0);
@@ -96,10 +96,10 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const continueWaiting = useCallback(() => {
     console.log('User chose to continue waiting');
     setWaitingForUser(false);
-    // Extend timeout for another 10 seconds
+    // Extend timeout for another 5 seconds (reduced from 10)
     loadingTimeoutRef.current = setTimeout(() => {
       setWaitingForUser(true);
-    }, 10000);
+    }, 5000);
   }, []);
 
   const handleLoadingTimeout = useCallback(() => {
@@ -126,7 +126,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   }, []);
 
   const retryLoading = useCallback(() => {
-    console.log('Retrying PDF load for:', fileUrl);
+    console.log('Retrying PDF load for:', fileUrl, '(using local worker)');
     setError(null);
     setLoading(true);
     setLoadingProgress(0);
@@ -135,35 +135,34 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     // Check file size first
     checkFileSize(fileUrl);
     
-    // Set timeout based on file size - much shorter timeouts
-    const timeoutDuration = fileSize > 2 * 1024 * 1024 ? 8000 : 5000; // 8s for >2MB, 5s for smaller
-    console.log(`Setting timeout for ${timeoutDuration}ms`);
+    // Much shorter timeouts since we're using local resources
+    const timeoutDuration = fileSize > 2 * 1024 * 1024 ? 4000 : 2000; // 4s for >2MB, 2s for smaller
+    console.log(`Setting timeout for ${timeoutDuration}ms (local worker)`);
     
     loadingTimeoutRef.current = setTimeout(handleLoadingTimeout, timeoutDuration);
     
-    // Fast and aggressive progress simulation
+    // Very fast progress simulation for local loading
     let progress = 0;
     let step = 0;
     
     const updateProgress = () => {
       step++;
       
-      // Quick initial progress, then slow down
-      if (step < 5) {
-        progress += 15; // Quick start: 0->75% in 1 second
-      } else if (step < 10) {
-        progress += 8; // Medium: 75->95% in 1 second
+      // Very aggressive progress for local resources
+      if (step < 3) {
+        progress += 25; // 0->75% in 0.6 seconds
+      } else if (step < 6) {
+        progress += 12; // 75->99% in 0.6 seconds
       } else {
-        progress += 2; // Slow: 95->99% slowly
+        progress += 1; // Stay at 99%
       }
       
-      // Don't cap progress - let it reach 99%
       if (progress > 99) {
         progress = 99;
       }
       
       setLoadingProgress(progress);
-      console.log(`Simulated progress: ${progress}%`);
+      console.log(`Simulated progress (local): ${progress}%`);
       
       if (progress < 99) {
         progressIntervalRef.current = setTimeout(updateProgress, 200);
@@ -171,7 +170,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     };
     
     // Start simulation immediately
-    progressIntervalRef.current = setTimeout(updateProgress, 100);
+    progressIntervalRef.current = setTimeout(updateProgress, 50);
   }, [fileUrl, fileSize, handleLoadingTimeout, checkFileSize]);
 
   const goToPrevPage = () => {
@@ -199,7 +198,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   // Reset state when opening
   useEffect(() => {
     if (isOpen) {
-      console.log('PDF viewer opened for:', fileUrl);
+      console.log('PDF viewer opened for:', fileUrl, '(local worker mode)');
       setPageNumber(1);
       setScale(1.0);
       setError(null);
@@ -207,7 +206,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       
       // Check cache first
       const cached = cacheRef.current[fileUrl];
-      if (cached && Date.now() - cached.loadedAt < 3 * 60 * 1000) { // 3 minutes cache
+      if (cached && Date.now() - cached.loadedAt < 5 * 60 * 1000) { // 5 minutes cache
         console.log('Using cached PDF data');
         setNumPages(cached.numPages);
         setLoading(false);

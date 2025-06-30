@@ -39,7 +39,7 @@ const PDFViewerProgress = ({
               </div>
             ) : (
               <span className="hebrew-text text-sm font-medium text-primary">
-                {isLargeFile ? `טוען קובץ של ${fileSizeMB}MB...` : 'טוען קובץ...'}
+                {isLargeFile ? `טוען קובץ של ${fileSizeMB}MB מקומית...` : 'טוען קובץ מקומית...'}
               </span>
             )}
           </div>
@@ -68,7 +68,7 @@ const PDFViewerProgress = ({
           <div className="mt-4 space-y-3 text-center">
             <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
               <p className="hebrew-text text-sm text-amber-800 mb-2">
-                הקובץ גדול ויכול לקחת עוד כמה שניות להיטען
+                הקובץ גדול ויכול לקחת עוד רגע להיטען (בטעינה מקומית)
               </p>
               <div className="flex gap-2 justify-center">
                 {onContinue && (
@@ -102,11 +102,11 @@ const PDFViewerProgress = ({
               </p>
             ) : loadingProgress > 80 ? (
               <p className="hebrew-text text-xs text-blue-600">
-                מסיים טעינה...
+                מסיים טעינה מקומית...
               </p>
             ) : (
               <p className="hebrew-text text-xs text-muted-foreground">
-                {isLargeFile ? 'קובץ גדול - אנא המתינו' : 'טוען...'}
+                {isLargeFile ? 'קובץ גדול - טוען מקומית' : 'טוען מקומית...'}
               </p>
             )}
           </div>
