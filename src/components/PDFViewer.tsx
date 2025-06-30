@@ -5,6 +5,7 @@ import PDFViewerProgress from './PDFViewerProgress';
 import PDFViewerControls from './PDFViewerControls';
 import PDFViewerContent from './PDFViewerContent';
 import { usePDFViewer } from '../hooks/usePDFViewer';
+import { FallbackStrategy } from '../hooks/usePDFFallback';
 
 interface PDFViewerProps {
   fileUrl: string;
@@ -26,6 +27,8 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     waitingForUser,
     loadingPhase,
     loadingStage,
+    fallbackSuggestion,
+    debugMode,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,
@@ -38,7 +41,9 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     setPage,
     cancelLoading,
     retryLoading,
-    continueWaiting
+    continueWaiting,
+    executeFallbackStrategy,
+    setDebugMode
   } = usePDFViewer(fileUrl, isOpen);
 
   const handleDownload = async () => {
@@ -63,6 +68,21 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
   const handleCancel = () => {
     cancelLoading();
     onClose();
+  };
+
+  const handleFallback = async (strategy: FallbackStrategy) => {
+    console.log(`🔄 User selected fallback strategy: ${strategy}`);
+    
+    const result = await executeFallbackStrategy(strategy);
+    
+    if (result?.type === 'simple-options') {
+      // Retry with simplified options
+      console.log('🔄 Retrying with simplified PDF.js options');
+      retryLoading();
+    } else if (result?.type === 'redirect' || result?.type === 'download') {
+      // Close viewer since content opened elsewhere or downloaded
+      onClose();
+    }
   };
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -94,8 +114,15 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
           zoomOut();
         }
         break;
+      case 'D':
+        // Toggle debug mode with Shift+D
+        if (event.shiftKey) {
+          event.preventDefault();
+          setDebugMode(prev => !prev);
+        }
+        break;
     }
-  }, [isOpen, loading, onClose, goToPrevPage, goToNextPage, zoomIn, zoomOut, handleCancel]);
+  }, [isOpen, loading, onClose, goToPrevPage, goToNextPage, zoomIn, zoomOut, handleCancel, setDebugMode]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -123,8 +150,12 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             fileSize={fileSize}
             waitingForUser={waitingForUser}
             loadingPhase={loadingPhase}
+            fallbackSuggestion={fallbackSuggestion}
+            debugMode={debugMode}
             onCancel={handleCancel}
             onContinue={continueWaiting}
+            onFallback={handleFallback}
+            onToggleDebug={() => setDebugMode(prev => !prev)}
           />
         )}
 
@@ -156,6 +187,8 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             onDocumentLoadProgress={onDocumentLoadProgress}
             onRetry={retryLoading}
             onProcessingStart={onProcessingStart}
+            fallbackSuggestion={fallbackSuggestion}
+            onFallback={handleFallback}
           />
         </div>
 
@@ -163,6 +196,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
           <div className="bg-white border-t border-border p-2 text-center">
             <span className="hebrew-text text-xs text-muted-foreground">
               השתמש בחיצים לדפדוף, + ו - לזום, ESC לסגירה
+              {debugMode && <span className="text-blue-600"> | מצב דיבוג: Shift+D</span>}
             </span>
           </div>
         )}
