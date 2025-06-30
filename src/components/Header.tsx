@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
@@ -11,7 +10,7 @@ const Header = () => {
     { name: 'בית', path: '/' },
     { name: 'מקרא', path: '/mikra' },
     { name: 'מדרש ואגדה', path: '/midrash' },
-    { name: 'עקרות הלכתית', path: '/halakha' },
+    { name: 'הלכה', path: '/halakha' },
     { name: 'אודות', path: '/about' },
     { name: 'צור קשר', path: '/contact' }
   ];

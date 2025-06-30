@@ -32,7 +32,7 @@ const Halakha = () => {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8">
           <h1 className="hebrew-title text-3xl sm:text-4xl font-bold text-primary mb-4">
-            עקרות הלכתית
+            הלכה
           </h1>
           
           <div className="bg-card border border-border rounded-lg p-6 mb-8">
