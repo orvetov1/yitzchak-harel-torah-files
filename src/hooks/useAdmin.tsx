@@ -15,10 +15,15 @@ export const useAdmin = () => {
   useEffect(() => {
     const adminData = localStorage.getItem('adminUser');
     if (adminData) {
-      setAdminUser(JSON.parse(adminData));
+      try {
+        setAdminUser(JSON.parse(adminData));
+      } catch (error) {
+        console.error('Error parsing admin data:', error);
+        localStorage.removeItem('adminUser');
+      }
     }
     setIsLoading(false);
-  }, []);
+  }, []); // Empty dependency array to run only once
 
   const login = async (username: string, password: string) => {
     try {
@@ -42,7 +47,7 @@ export const useAdmin = () => {
       localStorage.setItem('adminUser', JSON.stringify(user));
       
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
   };
@@ -80,7 +85,7 @@ export const useAdmin = () => {
       }
 
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       return { success: false, error: error.message };
     }
   };
