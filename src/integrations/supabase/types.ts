@@ -72,9 +72,6 @@ export type Database = {
           file_path: string
           file_size: number | null
           id: string
-          num_pages_total: number | null
-          processing_status: string | null
-          split_at: string | null
           title: string
           updated_at: string
           uploaded_by: string | null
@@ -87,9 +84,6 @@ export type Database = {
           file_path: string
           file_size?: number | null
           id?: string
-          num_pages_total?: number | null
-          processing_status?: string | null
-          split_at?: string | null
           title: string
           updated_at?: string
           uploaded_by?: string | null
@@ -102,9 +96,6 @@ export type Database = {
           file_path?: string
           file_size?: number | null
           id?: string
-          num_pages_total?: number | null
-          processing_status?: string | null
-          split_at?: string | null
           title?: string
           updated_at?: string
           uploaded_by?: string | null
@@ -122,44 +113,6 @@ export type Database = {
             columns: ["uploaded_by"]
             isOneToOne: false
             referencedRelation: "admin_users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      pdf_pages: {
-        Row: {
-          created_at: string
-          file_path: string
-          file_size: number | null
-          id: string
-          page_number: number
-          pdf_file_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          file_path: string
-          file_size?: number | null
-          id?: string
-          page_number: number
-          pdf_file_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          file_path?: string
-          file_size?: number | null
-          id?: string
-          page_number?: number
-          pdf_file_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "pdf_pages_pdf_file_id_fkey"
-            columns: ["pdf_file_id"]
-            isOneToOne: false
-            referencedRelation: "pdf_files"
             referencedColumns: ["id"]
           },
         ]

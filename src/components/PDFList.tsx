@@ -1,12 +1,6 @@
 
-import React, { useState } from 'react';
-import { Button } from './ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { Eye, Download } from 'lucide-react';
-import PDFSkeleton from './PDFSkeleton';
-import PDFViewer from './PDFViewer';
-import LazyPDFViewer from './LazyPDFViewer';
-import { supabase } from '@/integrations/supabase/client';
+import React from 'react';
+import { Download, Eye } from 'lucide-react';
 
 interface PDFItem {
   id: string;
@@ -19,125 +13,94 @@ interface PDFItem {
 interface PDFListProps {
   items: PDFItem[];
   category: string;
-  isLoading?: boolean;
 }
 
-const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
-  const [selectedPDF, setSelectedPDF] = useState<PDFItem | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
-
-  const handleView = (item: PDFItem) => {
-    setSelectedPDF(item);
-    setViewerOpen(true);
-  };
-
-  const handleDownload = async (item: PDFItem) => {
+const PDFList = ({ items, category }: PDFListProps) => {
+  const handleDownload = async (filePath: string, fileName: string) => {
     try {
-      const { data } = supabase.storage
-        .from('pdf-files')
-        .getPublicUrl(item.filePath);
-
-      const response = await fetch(data.publicUrl);
+      // Use fetch to download the file properly
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link element for download
       const link = document.createElement('a');
       link.href = url;
-      link.download = item.title.endsWith('.pdf') ? item.title : `${item.title}.pdf`;
+      link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      link.style.display = 'none';
+      
+      // Add to document, click, and remove
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the blob URL
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error('Download failed:', error);
-      // Fallback to opening in new tab
-      const { data } = supabase.storage
-        .from('pdf-files')
-        .getPublicUrl(item.filePath);
-      window.open(data.publicUrl, '_blank');
+      // Fallback: open in new tab if download fails
+      window.open(filePath, '_blank');
     }
   };
 
-  const getFileUrl = (item: PDFItem): string => {
-    const { data } = supabase.storage
-      .from('pdf-files')
-      .getPublicUrl(item.filePath);
-    return data.publicUrl;
+  const handleView = (filePath: string) => {
+    // Open PDF in new tab for viewing
+    window.open(filePath, '_blank');
   };
-
-  if (isLoading) {
-    return (
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <PDFSkeleton key={index} />
-        ))}
-      </div>
-    );
-  }
 
   if (items.length === 0) {
     return (
       <div className="text-center py-12">
-        <p className="hebrew-text text-lg text-muted-foreground">
-          אין קבצים זמינים בקטגוריה זו כרגע
-        </p>
+        <div className="hebrew-text text-muted-foreground">
+          עדיין לא הועלו קבצים בקטגוריה זו
+        </div>
       </div>
     );
   }
 
   return (
-    <>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => (
-          <Card key={item.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <CardTitle className="hebrew-title text-lg leading-tight">
+    <div className="space-y-6">
+      {items.map((item) => (
+        <div key={item.id} className="bg-card border border-border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow">
+          <div className="flex flex-col gap-4">
+            <div className="flex-1">
+              <h3 className="hebrew-title text-lg font-semibold text-foreground mb-2">
                 {item.title}
-              </CardTitle>
+              </h3>
               {item.description && (
-                <p className="hebrew-text text-sm text-muted-foreground leading-relaxed">
+                <p className="hebrew-text text-muted-foreground text-sm leading-relaxed">
                   {item.description}
                 </p>
               )}
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleView(item)}
-                  className="hebrew-text"
-                >
-                  <Eye size={16} className="ml-2" />
-                  צפה
-                </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => handleDownload(item)}
-                  className="hebrew-text"
-                >
-                  <Download size={16} className="ml-2" />
-                  הורד
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Use LazyPDFViewer for new split-page functionality */}
-      {selectedPDF && (
-        <LazyPDFViewer
-          pdfFileId={selectedPDF.id}
-          fileName={selectedPDF.title}
-          isOpen={viewerOpen}
-          onClose={() => {
-            setViewerOpen(false);
-            setSelectedPDF(null);
-          }}
-        />
-      )}
-    </>
+            </div>
+            
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => handleView(item.filePath)}
+                className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground hover:bg-secondary/80 rounded-md transition-colors hebrew-text text-sm font-medium"
+                aria-label={`צפה ב${item.title}`}
+              >
+                <Eye size={16} />
+                צפה
+              </button>
+              
+              <button
+                onClick={() => handleDownload(item.filePath, item.title)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md transition-colors hebrew-text text-sm font-medium"
+                aria-label={`הורד את ${item.title}`}
+              >
+                <Download size={16} />
+                הורד
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 };
 
