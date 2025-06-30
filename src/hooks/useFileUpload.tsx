@@ -68,28 +68,31 @@ export const useFileUpload = () => {
         throw uploadError;
       }
 
-      // Get public URL - store the relative path instead of full URL
+      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('pdf-files')
         .getPublicUrl(storageFileName);
 
       console.log('✅ File uploaded to storage successfully');
       console.log('Public URL:', publicUrl);
-      console.log('Storage path:', storageFileName);
 
-      // Save file info to database with relative path for processing
-      const { data: insertData, error: dbError } = await supabase
+      // Save file info to database - using the exact column names from the schema
+      const insertData = {
+        title: title,
+        description: description || null,
+        file_path: publicUrl,
+        file_name: storageFileName, // Store the sanitized storage file name
+        category_id: categoryId,
+        file_size: file.size,
+        uploaded_by: adminUser?.id || null,
+        processing_status: 'pending'
+      };
+
+      console.log('📝 Inserting to database:', insertData);
+
+      const { data: dbInsertData, error: dbError } = await supabase
         .from('pdf_files')
-        .insert({
-          title,
-          description,
-          file_path: publicUrl, // Store full URL for public access
-          file_name: storageFileName, // Store relative path for processing
-          category_id: categoryId,
-          file_size: file.size,
-          uploaded_by: adminUser?.id,
-          processing_status: 'pending'
-        })
+        .insert(insertData)
         .select('id')
         .single();
 
@@ -100,37 +103,28 @@ export const useFileUpload = () => {
         throw dbError;
       }
 
-      console.log('✅ File record created in database:', insertData.id);
+      console.log('✅ File record created in database:', dbInsertData.id);
 
-      // טריגר עיבוד PDF ישירות מהקוד במקום טריגר דאטהבייס
+      // Start PDF processing
       try {
         console.log('🔄 Starting PDF processing...');
         
-        // חילוץ הנתיב היחסי מהURL המלא
-        let relativePath = storageFileName;
-        if (publicUrl.includes('/storage/v1/object/public/pdf-files/')) {
-          const match = publicUrl.match(/\/pdf-files\/(.+)$/);
-          relativePath = match ? match[1] : storageFileName;
-        }
-
         const { error: functionError } = await supabase.functions.invoke('split-pdf', {
           body: {
-            pdf_file_id: insertData.id,
-            file_path: relativePath,
+            pdf_file_id: dbInsertData.id,
+            file_path: storageFileName,
             file_name: storageFileName
           }
         });
 
         if (functionError) {
           console.error('PDF processing function error:', functionError);
-          // לא נזרוק שגיאה כי הקובץ כבר הועלה בהצלחה
           console.log('⚠️ PDF processing failed but file was uploaded successfully');
         } else {
           console.log('✅ PDF processing started successfully');
         }
       } catch (processingError) {
         console.error('PDF processing error:', processingError);
-        // לא נזרוק שגיאה כי הקובץ כבר הועלה בהצלחה
       }
 
       toast.success('הקובץ הועלה בהצלחה');
