@@ -2,6 +2,7 @@
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
+import { usePDFComplexity } from '../hooks/usePDFComplexity';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -9,6 +10,7 @@ console.log('PDF.js worker configured to use local file (no external CDN)');
 
 interface PDFViewerContentProps {
   fileUrl: string;
+  fileSize: number;
   pageNumber: number;
   scale: number;
   loading: boolean;
@@ -18,10 +20,12 @@ interface PDFViewerContentProps {
   onDocumentLoadError: (error: Error) => void;
   onDocumentLoadProgress: ({ loaded, total }: { loaded: number; total: number }) => void;
   onRetry?: () => void;
+  onProcessingStart?: () => void;
 }
 
 const PDFViewerContent = ({
   fileUrl,
+  fileSize,
   pageNumber,
   scale,
   loading,
@@ -30,8 +34,11 @@ const PDFViewerContent = ({
   onDocumentLoadSuccess,
   onDocumentLoadError,
   onDocumentLoadProgress,
-  onRetry
+  onRetry,
+  onProcessingStart
 }: PDFViewerContentProps) => {
+  const { analyzeComplexity, getOptimizedSettings } = usePDFComplexity();
+
   if (loading) {
     return (
       <div className="text-center hebrew-text space-y-4 p-8">
@@ -75,34 +82,37 @@ const PDFViewerContent = ({
     );
   }
 
+  // Analyze PDF complexity and get optimized settings
+  const complexity = analyzeComplexity(fileSize);
+  const optimizedOptions = getOptimizedSettings(complexity);
+
   return (
     <div className="bg-white shadow-lg">
       <Document
         file={fileUrl}
-        onLoadSuccess={onDocumentLoadSuccess}
-        onLoadError={onDocumentLoadError}
+        onLoadSuccess={(pdf) => {
+          console.log('📄 PDF Document loaded successfully');
+          onDocumentLoadSuccess({ numPages: pdf.numPages });
+        }}
+        onLoadError={(error) => {
+          console.error('❌ PDF Document load error (Full object):', error);
+          console.error('❌ Error message:', error.message);
+          console.error('❌ Error name:', error.name);
+          onDocumentLoadError(error);
+        }}
         onLoadProgress={onDocumentLoadProgress}
         loading={null}
-        options={{
-          // Optimized settings for better performance
-          verbosity: 0,
-          maxImageSize: 1024 * 1024 * 2, // Reduced from 4MB to 2MB for better performance
-          disableFontFace: false,
-          disableRange: false,
-          disableStream: false,
-          // Disable external CDN dependencies for better reliability
-          cMapUrl: '',
-          cMapPacked: false,
-          standardFontDataUrl: '',
-          useSystemFonts: true,
-          enableXfa: false, // Disable XFA to avoid potential external dependencies
+        options={optimizedOptions}
+        onSourceSuccess={() => {
+          console.log('📥 PDF source loaded, starting processing...');
+          onProcessingStart?.();
         }}
       >
         <Page
           pageNumber={pageNumber}
           scale={scale}
           onLoadStart={() => {
-            console.log(`🔄 Loading page ${pageNumber} with optimized settings`);
+            console.log(`🔄 Loading page ${pageNumber} with ${complexity.estimatedComplexity} complexity settings`);
             setPageLoading(true);
           }}
           onLoadSuccess={() => {
@@ -121,8 +131,8 @@ const PDFViewerContent = ({
               </div>
             </div>
           }
-          renderTextLayer={true}
-          renderAnnotationLayer={true}
+          renderTextLayer={complexity.estimatedComplexity !== 'complex'}
+          renderAnnotationLayer={complexity.estimatedComplexity === 'simple'}
         />
       </Document>
     </div>

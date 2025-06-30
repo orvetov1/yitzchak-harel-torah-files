@@ -25,10 +25,12 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     fileSize,
     waitingForUser,
     loadingPhase,
+    loadingStage,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,
     onDocumentLoadProgress,
+    onProcessingStart,
     goToPrevPage,
     goToNextPage,
     zoomIn,
@@ -143,6 +145,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
           <PDFViewerContent
             fileUrl={fileUrl}
+            fileSize={fileSize}
             pageNumber={pageNumber}
             scale={scale}
             loading={loading}
@@ -152,6 +155,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             onDocumentLoadError={onDocumentLoadError}
             onDocumentLoadProgress={onDocumentLoadProgress}
             onRetry={retryLoading}
+            onProcessingStart={onProcessingStart}
           />
         </div>
 
