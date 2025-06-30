@@ -145,7 +145,6 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             scale={scale}
             loading={loading}
             error={error}
-            fileSize={fileSize}
             setPageLoading={setPageLoading}
             onDocumentLoadSuccess={onDocumentLoadSuccess}
             onDocumentLoadError={onDocumentLoadError}
@@ -157,7 +156,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
         {!loading && (
           <div className="bg-white border-t border-border p-2 text-center">
             <span className="hebrew-text text-xs text-muted-foreground">
-              השתמש בחיצים לדפדוף, + ו - לזום, ESC לסגירה • טעינה מותאמת לביצועים
+              השתמש בחיצים לדפדוף, + ו - לזום, ESC לסגירה
             </span>
           </div>
         )}
