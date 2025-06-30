@@ -50,45 +50,62 @@ export const useFileUpload = () => {
       const sanitizedFileName = sanitizeFileName(file.name);
       const storageFileName = `${Date.now()}-${sanitizedFileName}`;
       
+      console.log('📤 Starting file upload...');
       console.log('Original file name:', file.name);
-      console.log('Sanitized file name:', storageFileName);
+      console.log('Storage file name:', storageFileName);
+      console.log('File size:', file.size, 'bytes');
 
       // Upload file to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pdf-files')
-        .upload(storageFileName, file);
+        .upload(storageFileName, file, {
+          contentType: 'application/pdf',
+          upsert: false
+        });
 
       if (uploadError) {
         console.error('Storage upload error:', uploadError);
         throw uploadError;
       }
 
-      // Get public URL
+      // Get public URL - store the relative path instead of full URL
       const { data: { publicUrl } } = supabase.storage
         .from('pdf-files')
         .getPublicUrl(storageFileName);
 
-      // Save file info to database
-      const { error: dbError } = await supabase
+      console.log('✅ File uploaded to storage successfully');
+      console.log('Public URL:', publicUrl);
+      console.log('Storage path:', storageFileName);
+
+      // Save file info to database with relative path for processing
+      const { data: insertData, error: dbError } = await supabase
         .from('pdf_files')
         .insert({
           title,
           description,
-          file_path: publicUrl,
-          file_name: file.name, // Keep original name for display
+          file_path: publicUrl, // Store full URL for public access
+          file_name: storageFileName, // Store relative path for processing
           category_id: categoryId,
           file_size: file.size,
-          uploaded_by: adminUser?.id
-        });
+          uploaded_by: adminUser?.id,
+          processing_status: 'pending'
+        })
+        .select('id')
+        .single();
 
       if (dbError) {
         console.error('Database insert error:', dbError);
+        // Clean up uploaded file if database insert fails
+        await supabase.storage.from('pdf-files').remove([storageFileName]);
         throw dbError;
       }
 
-      toast.success('הקובץ הועלה בהצלחה');
+      console.log('✅ File record created in database:', insertData.id);
+      console.log('🔄 PDF processing will start automatically via trigger');
+
+      toast.success('הקובץ הועלה בהצלחה ויתחיל להתעבד');
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload error:', error);
       toast.error(`שגיאה בהעלאת הקובץ: ${error.message || 'שגיאה לא ידועה'}`);
       return false;

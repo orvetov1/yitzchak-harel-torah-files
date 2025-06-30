@@ -23,6 +23,7 @@ serve(async (req) => {
     const { pdf_file_id, file_path, file_name } = await req.json();
     
     console.log(`🚀 Starting PDF split for file: ${file_name} (ID: ${pdf_file_id})`);
+    console.log(`📁 File path received: ${file_path}`);
 
     // Update processing status to 'processing'
     await supabaseClient
@@ -30,19 +31,37 @@ serve(async (req) => {
       .update({ processing_status: 'processing' })
       .eq('id', pdf_file_id);
 
+    // Normalize file path - ensure it's relative
+    let normalizedPath = file_path;
+    if (file_path.includes('/storage/v1/object/public/pdf-files/')) {
+      // Extract relative path from full URL
+      const match = file_path.match(/\/pdf-files\/(.+)$/);
+      normalizedPath = match ? match[1] : file_path;
+    } else if (file_path.startsWith('http')) {
+      // If it's still a URL but different format, try to extract filename
+      normalizedPath = file_name || file_path.split('/').pop() || file_path;
+    }
+
+    console.log(`📁 Normalized path: ${normalizedPath}`);
+
     // Download the original PDF file from storage
-    console.log(`📥 Downloading PDF from: ${file_path}`);
+    console.log(`📥 Downloading PDF from storage path: ${normalizedPath}`);
     const { data: fileData, error: downloadError } = await supabaseClient.storage
       .from('pdf-files')
-      .download(file_path);
+      .download(normalizedPath);
 
     if (downloadError) {
+      console.error(`❌ Download error:`, downloadError);
       throw new Error(`Failed to download PDF: ${downloadError.message}`);
+    }
+
+    if (!fileData) {
+      throw new Error('No file data received from storage');
     }
 
     // Convert blob to array buffer
     const pdfBytes = await fileData.arrayBuffer();
-    console.log(`📄 PDF downloaded, size: ${pdfBytes.byteLength} bytes`);
+    console.log(`📄 PDF downloaded successfully, size: ${pdfBytes.byteLength} bytes`);
 
     // Load PDF document
     const pdfDoc = await PDFDocument.load(pdfBytes);
@@ -83,7 +102,7 @@ serve(async (req) => {
 
       if (uploadError) {
         console.error(`❌ Failed to upload page ${pageNumber}: ${uploadError.message}`);
-        continue;
+        continue; // Skip this page but continue with others
       }
 
       // Prepare data for batch insert
@@ -97,12 +116,17 @@ serve(async (req) => {
       console.log(`✅ Page ${pageNumber} uploaded successfully (${singlePageBytes.length} bytes)`);
     }
 
+    if (pageInserts.length === 0) {
+      throw new Error('No pages were successfully processed');
+    }
+
     // Batch insert all pages to database
     const { error: insertError } = await supabaseClient
       .from('pdf_pages')
       .insert(pageInserts);
 
     if (insertError) {
+      console.error(`❌ Database insert error:`, insertError);
       throw new Error(`Failed to insert page records: ${insertError.message}`);
     }
 
@@ -115,13 +139,14 @@ serve(async (req) => {
       })
       .eq('id', pdf_file_id);
 
-    console.log(`🎉 PDF split completed successfully: ${totalPages} pages processed`);
+    console.log(`🎉 PDF split completed successfully: ${totalPages} pages processed, ${pageInserts.length} pages saved`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: `PDF split into ${totalPages} pages successfully`,
-        pages_created: pageInserts.length 
+        pages_created: pageInserts.length,
+        total_pages: totalPages
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -134,8 +159,8 @@ serve(async (req) => {
 
     // Update processing status to 'failed' if we have the PDF file ID
     try {
-      const body = await req.clone().json();
-      if (body.pdf_file_id) {
+      const requestBody = await req.clone().json();
+      if (requestBody.pdf_file_id) {
         const supabaseClient = createClient(
           'https://irvaecqmzkecyispsxul.supabase.co',
           Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -144,16 +169,19 @@ serve(async (req) => {
         await supabaseClient
           .from('pdf_files')
           .update({ processing_status: 'failed' })
-          .eq('id', body.pdf_file_id);
+          .eq('id', requestBody.pdf_file_id);
+        
+        console.log(`📝 Updated processing status to 'failed' for PDF: ${requestBody.pdf_file_id}`);
       }
     } catch (updateError) {
-      console.error('Failed to update error status:', updateError);
+      console.error('❌ Failed to update error status:', updateError);
     }
 
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: error.message 
+        error: error.message,
+        details: error.stack
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

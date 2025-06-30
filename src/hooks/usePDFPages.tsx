@@ -25,6 +25,39 @@ export const usePDFPages = (pdfFileId: string) => {
   useEffect(() => {
     if (pdfFileId) {
       loadPDFPages();
+      
+      // Set up real-time subscription for processing status updates
+      const subscription = supabase
+        .channel('pdf-processing')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'pdf_files',
+            filter: `id=eq.${pdfFileId}`
+          },
+          (payload) => {
+            console.log('📡 Processing status updated:', payload.new);
+            if (payload.new) {
+              setFileInfo(prev => prev ? {
+                ...prev,
+                processingStatus: payload.new.processing_status,
+                numPagesTotal: payload.new.num_pages_total
+              } : null);
+              
+              // If processing completed, reload pages
+              if (payload.new.processing_status === 'completed') {
+                loadPDFPages();
+              }
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(subscription);
+      };
     }
   }, [pdfFileId]);
 
@@ -36,7 +69,7 @@ export const usePDFPages = (pdfFileId: string) => {
       // Load file info first
       const { data: fileData, error: fileError } = await supabase
         .from('pdf_files')
-        .select('id, title, num_pages_total, processing_status')
+        .select('id, title, num_pages_total, processing_status, file_path')
         .eq('id', pdfFileId)
         .single();
 
@@ -71,6 +104,7 @@ export const usePDFPages = (pdfFileId: string) => {
         }));
 
         setPages(formattedPages);
+        console.log(`📄 Loaded ${formattedPages.length} pages for PDF ${pdfFileId}`);
       }
 
     } catch (err) {
@@ -91,20 +125,64 @@ export const usePDFPages = (pdfFileId: string) => {
 
   const retryProcessing = async () => {
     try {
-      const { error } = await supabase.functions.invoke('split-pdf', {
+      setError(null);
+      
+      // First, reset the processing status
+      const { error: updateError } = await supabase
+        .from('pdf_files')
+        .update({ processing_status: 'pending' })
+        .eq('id', pdfFileId);
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      // Clear existing pages
+      const { error: deleteError } = await supabase
+        .from('pdf_pages')
+        .delete()
+        .eq('pdf_file_id', pdfFileId);
+
+      if (deleteError) {
+        console.warn('Warning: Could not clear existing pages:', deleteError);
+      }
+
+      // Get file info for retry
+      const { data: fileData, error: fileError } = await supabase
+        .from('pdf_files')
+        .select('file_path, file_name')
+        .eq('id', pdfFileId)
+        .single();
+
+      if (fileError) {
+        throw fileError;
+      }
+
+      // Extract relative path
+      let relativePath = fileData.file_path;
+      if (fileData.file_path.includes('/storage/v1/object/public/pdf-files/')) {
+        const match = fileData.file_path.match(/\/pdf-files\/(.+)$/);
+        relativePath = match ? match[1] : fileData.file_name;
+      }
+
+      // Invoke the split function
+      const { error: functionError } = await supabase.functions.invoke('split-pdf', {
         body: {
           pdf_file_id: pdfFileId,
-          file_path: fileInfo?.title, // This should be updated to use actual file path
-          file_name: fileInfo?.title
+          file_path: relativePath,
+          file_name: fileData.file_name
         }
       });
 
-      if (error) {
-        throw error;
+      if (functionError) {
+        throw functionError;
       }
 
-      // Reload pages after retry
+      console.log('🔄 PDF processing retry initiated');
+      
+      // Reload file info to reflect new status
       await loadPDFPages();
+
     } catch (err) {
       console.error('Error retrying processing:', err);
       setError('שגיאה בהפעלה מחדש של העיבוד');
