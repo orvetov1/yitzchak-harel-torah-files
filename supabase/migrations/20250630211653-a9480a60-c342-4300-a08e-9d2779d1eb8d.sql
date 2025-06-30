@@ -28,7 +28,7 @@ BEGIN
       url := 'https://irvaecqmzkecyispsxul.supabase.co/functions/v1/split-pdf',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer ' || current_setting('request.jwt.claims', true)::json->>'sub'
+        'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlydmFlY3FtemtlY3lpc3BzeHVsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTIyODQ4OCwiZXhwIjoyMDY2ODA0NDg4fQ.YgLa6yEjHWrHfIYgMQoE7_kNBKbhTlN6zqGo6fT6vJU'
       ),
       body := jsonb_build_object(
         'pdf_file_id', NEW.id,
