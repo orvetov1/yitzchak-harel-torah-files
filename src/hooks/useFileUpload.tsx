@@ -101,9 +101,39 @@ export const useFileUpload = () => {
       }
 
       console.log('✅ File record created in database:', insertData.id);
-      console.log('🔄 PDF processing will start automatically via trigger');
 
-      toast.success('הקובץ הועלה בהצלחה ויתחיל להתעבד');
+      // טריגר עיבוד PDF ישירות מהקוד במקום טריגר דאטהבייס
+      try {
+        console.log('🔄 Starting PDF processing...');
+        
+        // חילוץ הנתיב היחסי מהURL המלא
+        let relativePath = storageFileName;
+        if (publicUrl.includes('/storage/v1/object/public/pdf-files/')) {
+          const match = publicUrl.match(/\/pdf-files\/(.+)$/);
+          relativePath = match ? match[1] : storageFileName;
+        }
+
+        const { error: functionError } = await supabase.functions.invoke('split-pdf', {
+          body: {
+            pdf_file_id: insertData.id,
+            file_path: relativePath,
+            file_name: storageFileName
+          }
+        });
+
+        if (functionError) {
+          console.error('PDF processing function error:', functionError);
+          // לא נזרוק שגיאה כי הקובץ כבר הועלה בהצלחה
+          console.log('⚠️ PDF processing failed but file was uploaded successfully');
+        } else {
+          console.log('✅ PDF processing started successfully');
+        }
+      } catch (processingError) {
+        console.error('PDF processing error:', processingError);
+        // לא נזרוק שגיאה כי הקובץ כבר הועלה בהצלחה
+      }
+
+      toast.success('הקובץ הועלה בהצלחה');
       return true;
     } catch (error: any) {
       console.error('Upload error:', error);
