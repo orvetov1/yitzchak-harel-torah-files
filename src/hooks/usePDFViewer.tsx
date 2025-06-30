@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 interface DocumentCache {
@@ -17,30 +18,48 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const [pageLoading, setPageLoading] = useState<boolean>(false);
   const [fileSize, setFileSize] = useState<number>(0);
   const [waitingForUser, setWaitingForUser] = useState<boolean>(false);
+  const [loadingPhase, setLoadingPhase] = useState<string>('');
   
   const cacheRef = useRef<DocumentCache>({});
   const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const loadingStartTime = useRef<number>(0);
 
-  // Get file size for better UX
-  const checkFileSize = useCallback(async (url: string) => {
-    try {
-      const response = await fetch(url, { method: 'HEAD' });
-      const size = parseInt(response.headers.get('Content-Length') || '0');
-      setFileSize(size);
-      console.log(`PDF file size: ${Math.round(size / 1024)}KB`);
-    } catch (error) {
-      console.log('Could not determine file size');
-    }
+  // Enhanced timeout calculation based on file size
+  const calculateTimeout = useCallback((fileSize: number): number => {
+    if (fileSize <= 1024 * 1024) return 8000; // 8s for ≤1MB
+    if (fileSize <= 3 * 1024 * 1024) return 12000; // 12s for 1-3MB
+    if (fileSize <= 5 * 1024 * 1024) return 18000; // 18s for 3-5MB
+    return 25000; // 25s for >5MB
   }, []);
 
+  // Get file size with detailed logging
+  const checkFileSize = useCallback(async (url: string) => {
+    try {
+      const startTime = Date.now();
+      const response = await fetch(url, { method: 'HEAD' });
+      const networkTime = Date.now() - startTime;
+      const size = parseInt(response.headers.get('Content-Length') || '0');
+      setFileSize(size);
+      
+      const sizeKB = Math.round(size / 1024);
+      const sizeMB = Math.round(size / (1024 * 1024) * 10) / 10;
+      console.log(`PDF file size: ${sizeKB}KB (${sizeMB}MB), network check took ${networkTime}ms`);
+      console.log(`Calculated timeout: ${calculateTimeout(size)}ms for this file size`);
+    } catch (error) {
+      console.warn('Could not determine file size, using default timeout');
+    }
+  }, [calculateTimeout]);
+
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    console.log('PDF loaded successfully with', numPages, 'pages (using local worker)');
+    const loadTime = Date.now() - loadingStartTime.current;
+    console.log(`✅ PDF loaded successfully with ${numPages} pages in ${loadTime}ms`);
     setNumPages(numPages);
     setLoading(false);
     setLoadingProgress(100);
     setError(null);
     setWaitingForUser(false);
+    setLoadingPhase('');
     
     // Clear all timers
     if (loadingTimeoutRef.current) {
@@ -60,11 +79,13 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   }, [fileUrl]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('Error loading PDF with local worker:', error);
+    const loadTime = Date.now() - loadingStartTime.current;
+    console.error(`❌ Error loading PDF after ${loadTime}ms:`, error);
     setError('שגיאה בטעינת הקובץ - אנא נסה שוב');
     setLoading(false);
     setLoadingProgress(0);
     setWaitingForUser(false);
+    setLoadingPhase('');
     
     // Clear timers
     if (loadingTimeoutRef.current) {
@@ -80,39 +101,57 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const onDocumentLoadProgress = useCallback(({ loaded, total }: { loaded: number; total: number }) => {
     if (total > 0) {
       const progress = Math.min((loaded / total) * 100, 100);
+      const loadTime = Date.now() - loadingStartTime.current;
       setLoadingProgress(progress);
       
-      // Clear simulation when real progress takes over
-      if (progressIntervalRef.current && progress > 5) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-        console.log('Real progress detected, stopping simulation');
+      // Update loading phase based on progress
+      if (progress < 50) {
+        setLoadingPhase('מוריד קובץ...');
+      } else if (progress < 80) {
+        setLoadingPhase('מעבד תוכן...');
+      } else {
+        setLoadingPhase('מסיים עיבוד...');
       }
       
-      console.log(`Real loading progress: ${Math.round(progress)}%`);
+      // Clear simulation when real progress takes over
+      if (progressIntervalRef.current && progress > 10) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+        console.log(`🔄 Real progress detected (${Math.round(progress)}%), stopping simulation after ${loadTime}ms`);
+      }
+      
+      console.log(`📊 Real loading progress: ${Math.round(progress)}% (${Math.round(loaded/1024)}KB/${Math.round(total/1024)}KB)`);
     }
   }, []);
 
   const continueWaiting = useCallback(() => {
-    console.log('User chose to continue waiting');
+    const currentWaitTime = Date.now() - loadingStartTime.current;
+    console.log(`⏳ User chose to continue waiting (current wait: ${currentWaitTime}ms)`);
     setWaitingForUser(false);
-    // Extend timeout for another 5 seconds (reduced from 10)
+    
+    // Extend timeout by the original timeout duration
+    const extensionTime = calculateTimeout(fileSize);
     loadingTimeoutRef.current = setTimeout(() => {
+      const totalWaitTime = Date.now() - loadingStartTime.current;
+      console.log(`⏰ Extended timeout reached after ${totalWaitTime}ms total`);
       setWaitingForUser(true);
-    }, 5000);
-  }, []);
+    }, extensionTime);
+  }, [fileSize, calculateTimeout]);
 
   const handleLoadingTimeout = useCallback(() => {
-    console.log('PDF loading timeout reached');
+    const loadTime = Date.now() - loadingStartTime.current;
+    console.log(`⏰ PDF loading timeout reached after ${loadTime}ms`);
     setWaitingForUser(true);
   }, []);
 
   const cancelLoading = useCallback(() => {
-    console.log('Loading cancelled by user');
+    const loadTime = Date.now() - loadingStartTime.current;
+    console.log(`🚫 Loading cancelled by user after ${loadTime}ms`);
     setError('הטעינה בוטלה');
     setLoading(false);
     setLoadingProgress(0);
     setWaitingForUser(false);
+    setLoadingPhase('');
     
     // Clear all timers
     if (loadingTimeoutRef.current) {
@@ -126,53 +165,68 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   }, []);
 
   const retryLoading = useCallback(() => {
-    console.log('Retrying PDF load for:', fileUrl, '(using local worker)');
+    loadingStartTime.current = Date.now();
+    console.log(`🔄 Starting PDF load for: ${fileUrl}`);
     setError(null);
     setLoading(true);
     setLoadingProgress(0);
     setWaitingForUser(false);
+    setLoadingPhase('מתחיל טעינה...');
     
     // Check file size first
     checkFileSize(fileUrl);
     
-    // Much shorter timeouts since we're using local resources
-    const timeoutDuration = fileSize > 2 * 1024 * 1024 ? 4000 : 2000; // 4s for >2MB, 2s for smaller
-    console.log(`Setting timeout for ${timeoutDuration}ms (local worker)`);
+    // Calculate timeout based on file size
+    const timeoutDuration = calculateTimeout(fileSize);
+    console.log(`⏲️ Setting timeout for ${timeoutDuration}ms based on file size ${Math.round(fileSize/1024)}KB`);
     
     loadingTimeoutRef.current = setTimeout(handleLoadingTimeout, timeoutDuration);
     
-    // Very fast progress simulation for local loading
+    // Realistic progress simulation
     let progress = 0;
     let step = 0;
     
     const updateProgress = () => {
       step++;
       
-      // Very aggressive progress for local resources
-      if (step < 3) {
-        progress += 25; // 0->75% in 0.6 seconds
-      } else if (step < 6) {
-        progress += 12; // 75->99% in 0.6 seconds
+      // More realistic simulation - slower and stops at 90%
+      if (step <= 3) {
+        progress += 15; // 0->45% in first 3 steps (1.5s)
+      } else if (step <= 6) {
+        progress += 10; // 45->75% in next 3 steps (1.5s)
+      } else if (step <= 10) {
+        progress += 3; // 75->87% in next 4 steps (2s)
       } else {
-        progress += 1; // Stay at 99%
+        progress += 0.5; // Slow crawl to 90% max
       }
       
-      if (progress > 99) {
-        progress = 99;
+      if (progress > 90) {
+        progress = 90; // Cap at 90% to leave room for real progress
       }
       
       setLoadingProgress(progress);
-      console.log(`Simulated progress (local): ${progress}%`);
       
-      if (progress < 99) {
-        progressIntervalRef.current = setTimeout(updateProgress, 200);
+      // Update phase based on simulated progress
+      if (progress < 30) {
+        setLoadingPhase('מוריד קובץ...');
+      } else if (progress < 70) {
+        setLoadingPhase('מעבד תוכן...');
+      } else {
+        setLoadingPhase('מסיים עיבוד...');
+      }
+      
+      console.log(`📈 Simulated progress: ${Math.round(progress)}%`);
+      
+      if (progress < 90) {
+        progressIntervalRef.current = setTimeout(updateProgress, 500); // Slower simulation
       }
     };
     
-    // Start simulation immediately
-    progressIntervalRef.current = setTimeout(updateProgress, 50);
-  }, [fileUrl, fileSize, handleLoadingTimeout, checkFileSize]);
+    // Start simulation after a brief delay
+    progressIntervalRef.current = setTimeout(updateProgress, 200);
+  }, [fileUrl, fileSize, handleLoadingTimeout, checkFileSize, calculateTimeout]);
 
+  // Navigation functions
   const goToPrevPage = () => {
     setPageNumber(prev => Math.max(1, prev - 1));
   };
@@ -198,16 +252,17 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   // Reset state when opening
   useEffect(() => {
     if (isOpen) {
-      console.log('PDF viewer opened for:', fileUrl, '(local worker mode)');
+      console.log(`🚀 PDF viewer opened for: ${fileUrl}`);
       setPageNumber(1);
       setScale(1.0);
       setError(null);
       setWaitingForUser(false);
+      setLoadingPhase('');
       
       // Check cache first
       const cached = cacheRef.current[fileUrl];
       if (cached && Date.now() - cached.loadedAt < 5 * 60 * 1000) { // 5 minutes cache
-        console.log('Using cached PDF data');
+        console.log('📋 Using cached PDF data');
         setNumPages(cached.numPages);
         setLoading(false);
         setLoadingProgress(100);
@@ -249,6 +304,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     pageLoading,
     fileSize,
     waitingForUser,
+    loadingPhase,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,

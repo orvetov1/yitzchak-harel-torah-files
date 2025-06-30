@@ -39,7 +39,7 @@ const PDFViewerContent = ({
         <div className="space-y-2">
           <div className="hebrew-text text-xl font-medium">מכין את הקובץ...</div>
           <div className="hebrew-text text-sm text-muted-foreground">
-            טוען ממשאבים מקומיים
+            מעבד עם משאבים מקומיים
           </div>
         </div>
       </div>
@@ -84,9 +84,9 @@ const PDFViewerContent = ({
         onLoadProgress={onDocumentLoadProgress}
         loading={null}
         options={{
-          // Optimized settings for local-only resources
+          // Optimized settings for better performance
           verbosity: 0,
-          maxImageSize: 1024 * 1024 * 4, // 4MB max image size - reduced from 8MB
+          maxImageSize: 1024 * 1024 * 2, // Reduced from 4MB to 2MB for better performance
           disableFontFace: false,
           disableRange: false,
           disableStream: false,
@@ -102,15 +102,15 @@ const PDFViewerContent = ({
           pageNumber={pageNumber}
           scale={scale}
           onLoadStart={() => {
-            console.log(`Loading page ${pageNumber} with local resources`);
+            console.log(`🔄 Loading page ${pageNumber} with optimized settings`);
             setPageLoading(true);
           }}
           onLoadSuccess={() => {
-            console.log(`Page ${pageNumber} loaded successfully from local resources`);
+            console.log(`✅ Page ${pageNumber} loaded successfully`);
             setPageLoading(false);
           }}
           onLoadError={(error) => {
-            console.error('Page load error:', error);
+            console.error(`❌ Page ${pageNumber} load error:`, error);
             setPageLoading(false);
           }}
           loading={

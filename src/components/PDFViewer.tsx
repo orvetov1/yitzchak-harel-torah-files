@@ -24,6 +24,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     pageLoading,
     fileSize,
     waitingForUser,
+    loadingPhase,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,
@@ -119,6 +120,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             loadingProgress={loadingProgress}
             fileSize={fileSize}
             waitingForUser={waitingForUser}
+            loadingPhase={loadingPhase}
             onCancel={handleCancel}
             onContinue={continueWaiting}
           />

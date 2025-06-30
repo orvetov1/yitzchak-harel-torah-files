@@ -2,12 +2,13 @@
 import React from 'react';
 import { Progress } from './ui/progress';
 import { Button } from './ui/button';
-import { X, Clock, FileText } from 'lucide-react';
+import { X, Clock, FileText, Download } from 'lucide-react';
 
 interface PDFViewerProgressProps {
   loadingProgress: number;
   fileSize?: number;
   waitingForUser?: boolean;
+  loadingPhase?: string;
   onCancel?: () => void;
   onContinue?: () => void;
 }
@@ -16,31 +17,50 @@ const PDFViewerProgress = ({
   loadingProgress, 
   fileSize = 0, 
   waitingForUser = false,
+  loadingPhase = '',
   onCancel, 
   onContinue 
 }: PDFViewerProgressProps) => {
   const fileSizeKB = Math.round(fileSize / 1024);
-  const fileSizeMB = Math.round(fileSize / (1024 * 1024));
-  const isLargeFile = fileSize > 1024 * 1024; // > 1MB
+  const fileSizeMB = Math.round(fileSize / (1024 * 1024) * 10) / 10;
+  const isLargeFile = fileSize > 3 * 1024 * 1024; // > 3MB
+
+  // Calculate expected time based on file size
+  const getExpectedTime = () => {
+    if (fileSize <= 1024 * 1024) return '8 שניות';
+    if (fileSize <= 3 * 1024 * 1024) return '12 שניות';
+    if (fileSize <= 5 * 1024 * 1024) return '18 שניות';
+    return '25 שניות';
+  };
 
   return (
     <div className="bg-white border-b border-border p-4">
       <div className="max-w-md mx-auto">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <FileText size={20} className="text-primary" />
+            {waitingForUser ? (
+              <Clock size={20} className="text-amber-500 animate-pulse" />
+            ) : (
+              <FileText size={20} className="text-primary" />
+            )}
             
             {waitingForUser ? (
               <div className="flex items-center gap-2">
-                <Clock size={16} className="text-amber-500 animate-pulse" />
                 <span className="hebrew-text text-sm font-medium text-amber-700">
-                  הקובץ גדול - נדרש זמן נוסף
+                  הקובץ דורש זמן נוסף לעיבוד
                 </span>
               </div>
             ) : (
-              <span className="hebrew-text text-sm font-medium text-primary">
-                {isLargeFile ? `טוען קובץ של ${fileSizeMB}MB מקומית...` : 'טוען קובץ מקומית...'}
-              </span>
+              <div className="space-y-1">
+                <span className="hebrew-text text-sm font-medium text-primary">
+                  {isLargeFile ? `טוען קובץ של ${fileSizeMB}MB...` : `טוען קובץ של ${fileSizeKB}KB...`}
+                </span>
+                {loadingPhase && (
+                  <div className="hebrew-text text-xs text-muted-foreground">
+                    {loadingPhase}
+                  </div>
+                )}
+              </div>
             )}
           </div>
           
@@ -67,8 +87,11 @@ const PDFViewerProgress = ({
         {waitingForUser ? (
           <div className="mt-4 space-y-3 text-center">
             <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-              <p className="hebrew-text text-sm text-amber-800 mb-2">
-                הקובץ גדול ויכול לקחת עוד רגע להיטען (בטעינה מקומית)
+              <p className="hebrew-text text-sm text-amber-800 mb-1">
+                עיבוד הקובץ לוקח יותר זמן מהצפוי
+              </p>
+              <p className="hebrew-text text-xs text-amber-600 mb-3">
+                זמן צפוי לקובץ זה: עד {getExpectedTime()}
               </p>
               <div className="flex gap-2 justify-center">
                 {onContinue && (
@@ -102,12 +125,17 @@ const PDFViewerProgress = ({
               </p>
             ) : loadingProgress > 80 ? (
               <p className="hebrew-text text-xs text-blue-600">
-                מסיים טעינה מקומית...
+                מסיים עיבוד הקובץ...
               </p>
             ) : (
-              <p className="hebrew-text text-xs text-muted-foreground">
-                {isLargeFile ? 'קובץ גדול - טוען מקומית' : 'טוען מקומית...'}
-              </p>
+              <div className="space-y-1">
+                <p className="hebrew-text text-xs text-muted-foreground">
+                  {isLargeFile ? 'קובץ גדול - עיבוד עלול לקחת זמן' : 'מעבד קובץ...'}
+                </p>
+                <p className="hebrew-text text-xs text-muted-foreground/70">
+                  זמן צפוי: עד {getExpectedTime()}
+                </p>
+              </div>
             )}
           </div>
         )}
