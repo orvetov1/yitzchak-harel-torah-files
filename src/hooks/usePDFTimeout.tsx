@@ -20,7 +20,7 @@ export const usePDFTimeout = () => {
     loadingStartTime.current = Date.now();
   }, [calculateTimeout]);
 
-  const clearTimeout = useCallback(() => {
+  const clearPDFTimeout = useCallback(() => {
     if (loadingTimeoutRef.current) {
       clearTimeout(loadingTimeoutRef.current);
       loadingTimeoutRef.current = null;
@@ -42,7 +42,7 @@ export const usePDFTimeout = () => {
 
   return {
     startTimeout,
-    clearTimeout,
+    clearTimeout: clearPDFTimeout,
     extendTimeout,
     getElapsedTime,
     calculateTimeout
