@@ -4,8 +4,6 @@ import { usePDFProgressSimulation } from './usePDFProgressSimulation';
 import { usePDFCache } from './usePDFCache';
 import { usePDFPerformance } from './usePDFPerformance';
 import { usePDFComplexity } from './usePDFComplexity';
-import { usePDFDebug } from './usePDFDebug';
-import { usePDFFallback, FallbackStrategy } from './usePDFFallback';
 
 export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const [numPages, setNumPages] = useState<number>(0);
@@ -19,7 +17,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const [waitingForUser, setWaitingForUser] = useState<boolean>(false);
   const [loadingPhase, setLoadingPhase] = useState<string>('');
   const [loadingStage, setLoadingStage] = useState<'downloading' | 'processing' | 'rendering' | 'complete'>('downloading');
-  const [fallbackSuggestion, setFallbackSuggestion] = useState<FallbackStrategy | null>(null);
   
   const { startTimeout, clearTimeout, extendTimeout, getElapsedTime } = usePDFTimeout();
   const { startProgressSimulation, clearProgressSimulation } = usePDFProgressSimulation();
@@ -34,27 +31,13 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     reset: resetMetrics 
   } = usePDFPerformance();
   const { analyzeComplexity } = usePDFComplexity();
-  const { 
-    debugMode, 
-    setDebugMode, 
-    startTimer, 
-    endTimer, 
-    logRealProgress, 
-    analyzeResourceUsage, 
-    analyzePDFStructure, 
-    setWorkerStatus, 
-    setFailurePoint, 
-    reset: resetDebug,
-    getDebugSummary 
-  } = usePDFDebug();
-  const { suggestFallback, executeFallback } = usePDFFallback();
 
-  // Get file size with detailed logging and analysis
+  // Get file size with detailed logging
   const checkFileSize = useCallback(async (url: string) => {
     try {
-      startTimer('file-size-check');
+      const startTime = Date.now();
       const response = await fetch(url, { method: 'HEAD' });
-      const networkTime = endTimer('file-size-check');
+      const networkTime = Date.now() - startTime;
       const size = parseInt(response.headers.get('Content-Length') || '0');
       setFileSize(size);
       
@@ -62,37 +45,28 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       const sizeMB = Math.round(size / (1024 * 1024) * 10) / 10;
       console.log(`📏 PDF file size: ${sizeKB}KB (${sizeMB}MB), network check took ${networkTime}ms`);
       
-      // Analyze complexity and PDF structure
+      // Analyze complexity based on file size
       const complexity = analyzeComplexity(size);
-      const structure = analyzePDFStructure(size);
       setFileInfo(size, complexity.estimatedComplexity);
-      
-      // Resource usage check
-      analyzeResourceUsage();
       
       return size;
     } catch (error) {
       console.warn('⚠️ Could not determine file size, using default timeout');
-      setFailurePoint('download');
       return 0;
     }
-  }, [analyzeComplexity, analyzePDFStructure, setFileInfo, startTimer, endTimer, analyzeResourceUsage, setFailurePoint]);
+  }, [analyzeComplexity, setFileInfo]);
 
   const onProcessingStart = useCallback(() => {
     console.log('🔄 PDF.js processing started');
-    startTimer('pdf-processing');
     setLoadingStage('processing');
     setLoadingPhase('מעבד תוכן PDF...');
-    setWorkerStatus('working');
     markDownloadComplete();
     startProcessingTimer();
-  }, [markDownloadComplete, startProcessingTimer, startTimer, setWorkerStatus]);
+  }, [markDownloadComplete, startProcessingTimer]);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    const processingTime = endTimer('pdf-processing');
-    const totalTime = getElapsedTime();
-    console.log(`✅ PDF loaded successfully with ${numPages} pages`);
-    console.log(`⏱️ Processing took ${processingTime}ms, total time ${totalTime}ms`);
+    const loadTime = getElapsedTime();
+    console.log(`✅ PDF loaded successfully with ${numPages} pages in ${loadTime}ms`);
     
     setNumPages(numPages);
     setLoading(false);
@@ -101,22 +75,15 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     setWaitingForUser(false);
     setLoadingPhase('');
     setLoadingStage('complete');
-    setWorkerStatus('idle');
-    setFallbackSuggestion(null);
-    
-    // Log final progress
-    logRealProgress(100);
     
     // Mark processing as complete
     markProcessingComplete(true);
     
-    // Log final metrics and debug summary
+    // Log final metrics
     const metrics = getMetrics();
-    const debugSummary = getDebugSummary();
     if (metrics) {
       console.log('📊 Final Performance Metrics:', metrics);
     }
-    console.log('🔍 Debug Summary:', debugSummary);
     
     // Clear all timers
     clearTimeout();
@@ -124,68 +91,41 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     
     // Cache document info with performance data
     setCachedDocument(fileUrl, numPages);
-  }, [fileUrl, getElapsedTime, endTimer, clearTimeout, clearProgressSimulation, setCachedDocument, markProcessingComplete, getMetrics, logRealProgress, getDebugSummary, setWorkerStatus]);
+  }, [fileUrl, getElapsedTime, clearTimeout, clearProgressSimulation, setCachedDocument, markProcessingComplete, getMetrics]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    const processingTime = endTimer('pdf-processing');
-    const totalTime = getElapsedTime();
-    console.error(`❌ Error loading PDF after ${totalTime}ms (processing: ${processingTime}ms)`);
-    console.error('❌ Full error object:', {
+    const loadTime = getElapsedTime();
+    console.error(`❌ Error loading PDF after ${loadTime}ms:`, error);
+    console.error('❌ Full error object:', JSON.stringify({
       name: error.name,
       message: error.message,
-      stack: debugMode ? error.stack : '[hidden]'
-    });
+      stack: error.stack
+    }, null, 2));
     
-    // Enhanced error analysis
+    // Determine error type for better UX
     let errorMessage = 'שגיאה בטעינת הקובץ';
     let errorType = 'unknown';
-    let suggestedFallback: FallbackStrategy = 'download-only';
     
-    if (error.message.includes('Invalid PDF') || error.message.includes('corrupted')) {
+    if (error.message.includes('Invalid PDF')) {
       errorMessage = 'קובץ PDF פגום או לא תקין';
       errorType = 'invalid-pdf';
-      suggestedFallback = 'new-tab';
-      setFailurePoint('parsing');
-    } else if (error.message.includes('network') || error.message.includes('fetch')) {
+    } else if (error.message.includes('network')) {
       errorMessage = 'שגיאת רשת - אנא בדוק את החיבור שלך';
       errorType = 'network';
-      suggestedFallback = 'new-tab';
-      setFailurePoint('download');
-    } else if (error.message.includes('password') || error.message.includes('encrypted')) {
+    } else if (error.message.includes('password')) {
       errorMessage = 'קובץ PDF מוגן בסיסמה';
       errorType = 'password';
-      suggestedFallback = 'download-only';
-      setFailurePoint('parsing');
-    } else if (error.message.includes('timeout') || error.message.includes('time')) {
+    } else if (error.message.includes('timeout')) {
       errorMessage = 'הקובץ לוקח יותר מדי זמן לטעינה';
       errorType = 'timeout';
-      suggestedFallback = 'simple-load';
-      setFailurePoint('timeout');
-    } else if (error.message.includes('memory') || error.message.includes('heap')) {
-      errorMessage = 'הקובץ גדול מדי לעיבוד';
-      errorType = 'memory-error';
-      suggestedFallback = 'page-by-page';
-      setFailurePoint('rendering');
-    } else {
-      // Check debug data for more clues
-      const debugSummary = getDebugSummary();
-      if (debugSummary.progressStalled) {
-        errorType = 'processing-stalled';
-        suggestedFallback = 'simple-load';
-        setFailurePoint('rendering');
-      } else {
-        setFailurePoint('parsing');
-      }
     }
     
-    setError(`${errorMessage} - ${errorType !== 'unknown' ? 'נסה פתרון חלופי' : 'אנא נסה שוב'}`);
+    setError(`${errorMessage} - אנא נסה שוב`);
     setLoading(false);
     setLoadingProgress(0);
     setWaitingForUser(false);
     setLoadingPhase('');
     setLoadingStage('downloading');
-    setWorkerStatus('error');
-    setFallbackSuggestion(suggestedFallback);
     
     // Mark processing as failed
     markProcessingComplete(false, errorType);
@@ -193,7 +133,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     // Clear timers
     clearTimeout();
     clearProgressSimulation();
-  }, [getElapsedTime, endTimer, clearTimeout, clearProgressSimulation, markProcessingComplete, debugMode, getDebugSummary, setFailurePoint, setWorkerStatus]);
+  }, [getElapsedTime, clearTimeout, clearProgressSimulation, markProcessingComplete]);
 
   const onDocumentLoadProgress = useCallback(({ loaded, total }: { loaded: number; total: number }) => {
     if (total > 0) {
@@ -201,9 +141,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       const loadTime = getElapsedTime();
       setLoadingProgress(progress);
       setLoadingStage('downloading');
-      
-      // Log real progress for debugging
-      logRealProgress(progress);
       
       // Update loading phase based on progress
       if (progress < 30) {
@@ -224,7 +161,7 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       
       console.log(`📊 Real download progress: ${Math.round(progress)}% (${Math.round(loaded/1024)}KB/${Math.round(total/1024)}KB)`);
     }
-  }, [getElapsedTime, clearProgressSimulation, logRealProgress]);
+  }, [getElapsedTime, clearProgressSimulation]);
 
   const continueWaiting = useCallback(() => {
     const currentWaitTime = getElapsedTime();
@@ -238,22 +175,8 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const handleLoadingTimeout = useCallback(() => {
     const loadTime = getElapsedTime();
     console.log(`⏰ PDF loading timeout reached after ${loadTime}ms`);
-    
-    // Analyze what type of timeout this is
-    const debugSummary = getDebugSummary();
-    let suggestedFallback: FallbackStrategy = 'simple-load';
-    
-    if (debugSummary.progressStalled && debugSummary.finalProgress < 100) {
-      suggestedFallback = 'new-tab'; // Download didn't complete
-      setFailurePoint('download');
-    } else if (debugSummary.finalProgress >= 100) {
-      suggestedFallback = 'simple-load'; // Processing is stuck
-      setFailurePoint('rendering');
-    }
-    
-    setFallbackSuggestion(suggestedFallback);
     setWaitingForUser(true);
-  }, [getElapsedTime, getDebugSummary, setFailurePoint]);
+  }, [getElapsedTime]);
 
   const cancelLoading = useCallback(() => {
     const loadTime = getElapsedTime();
@@ -264,7 +187,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     setWaitingForUser(false);
     setLoadingPhase('');
     setLoadingStage('downloading');
-    setFallbackSuggestion(null);
     
     // Clear all timers
     clearTimeout();
@@ -279,47 +201,18 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     setWaitingForUser(false);
     setLoadingPhase('מתחיל טעינה...');
     setLoadingStage('downloading');
-    setFallbackSuggestion(null);
     
-    // Reset all metrics and debug data
+    // Reset performance metrics
     resetMetrics();
-    resetDebug();
     startDownloadTimer();
-    startTimer('total-load');
     
     // Check file size first
     checkFileSize(fileUrl).then((size) => {
-      // Start timeout and progress simulation (only if not in debug mode)
+      // Start timeout and progress simulation
       startTimeout(size || fileSize, handleLoadingTimeout);
-      if (!debugMode) {
-        startProgressSimulation(setLoadingProgress, setLoadingPhase);
-      }
+      startProgressSimulation(setLoadingProgress, setLoadingPhase);
     });
-  }, [fileUrl, fileSize, checkFileSize, startTimeout, handleLoadingTimeout, startProgressSimulation, resetMetrics, resetDebug, startDownloadTimer, startTimer, debugMode]);
-
-  const executeFallbackStrategy = useCallback(async (strategy?: FallbackStrategy) => {
-    const fallbackToUse = strategy || fallbackSuggestion;
-    if (!fallbackToUse) return null;
-    
-    try {
-      const result = await executeFallback(fallbackToUse, {
-        fileUrl,
-        fileName: 'document.pdf', // You might want to pass this as a prop
-        failureType: 'unknown'
-      });
-      
-      if (result.type === 'simple-options') {
-        // Return simplified options for retry
-        return result.options;
-      }
-      
-      console.log(`✅ Fallback executed: ${result.message}`);
-      return result;
-    } catch (error) {
-      console.error('❌ Fallback strategy failed:', error);
-      return null;
-    }
-  }, [fallbackSuggestion, executeFallback, fileUrl]);
+  }, [fileUrl, fileSize, checkFileSize, startTimeout, handleLoadingTimeout, startProgressSimulation, resetMetrics, startDownloadTimer]);
 
   // Navigation functions
   const goToPrevPage = () => {
@@ -354,7 +247,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       setWaitingForUser(false);
       setLoadingPhase('');
       setLoadingStage('downloading');
-      setFallbackSuggestion(null);
       
       // Check cache first
       const cached = getCachedDocument(fileUrl);
@@ -372,9 +264,8 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
       clearTimeout();
       clearProgressSimulation();
       resetMetrics();
-      resetDebug();
     }
-  }, [isOpen, fileUrl, retryLoading, getCachedDocument, clearTimeout, clearProgressSimulation, resetMetrics, resetDebug]);
+  }, [isOpen, fileUrl, retryLoading, getCachedDocument, clearTimeout, clearProgressSimulation, resetMetrics]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -396,8 +287,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     waitingForUser,
     loadingPhase,
     loadingStage,
-    fallbackSuggestion,
-    debugMode,
     setPageLoading,
     onDocumentLoadSuccess,
     onDocumentLoadError,
@@ -410,8 +299,6 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     setPage,
     cancelLoading,
     retryLoading,
-    continueWaiting,
-    executeFallbackStrategy,
-    setDebugMode
+    continueWaiting
   };
 };

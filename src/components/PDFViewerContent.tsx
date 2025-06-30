@@ -2,9 +2,7 @@
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
-import { ExternalLink, Download, RefreshCw } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
-import { FallbackStrategy } from '../hooks/usePDFFallback';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -23,8 +21,6 @@ interface PDFViewerContentProps {
   onDocumentLoadProgress: ({ loaded, total }: { loaded: number; total: number }) => void;
   onRetry?: () => void;
   onProcessingStart?: () => void;
-  fallbackSuggestion?: FallbackStrategy | null;
-  onFallback?: (strategy: FallbackStrategy) => void;
 }
 
 const PDFViewerContent = ({
@@ -39,9 +35,7 @@ const PDFViewerContent = ({
   onDocumentLoadError,
   onDocumentLoadProgress,
   onRetry,
-  onProcessingStart,
-  fallbackSuggestion,
-  onFallback
+  onProcessingStart
 }: PDFViewerContentProps) => {
   const { analyzeComplexity, getOptimizedSettings } = usePDFComplexity();
 
@@ -61,94 +55,28 @@ const PDFViewerContent = ({
 
   if (error) {
     return (
-      <div className="text-center hebrew-text space-y-4 p-8 max-w-md mx-auto">
+      <div className="text-center hebrew-text space-y-4 p-8">
         <div className="text-red-600 text-lg font-medium">{error}</div>
-        
-        {/* Primary action buttons */}
         <div className="flex gap-2 justify-center flex-wrap">
+          <Button 
+            variant="outline" 
+            onClick={() => window.open(fileUrl, '_blank')}
+            className="hebrew-text"
+          >
+            פתח בטאב חדש
+          </Button>
           {onRetry && (
             <Button 
               variant="default" 
               onClick={onRetry}
               className="hebrew-text"
             >
-              <RefreshCw size={16} />
               נסה שוב
             </Button>
           )}
-          <Button 
-            variant="outline" 
-            onClick={() => window.open(fileUrl, '_blank')}
-            className="hebrew-text"
-          >
-            <ExternalLink size={16} />
-            פתח בטאב חדש
-          </Button>
         </div>
-
-        {/* Fallback suggestions */}
-        {fallbackSuggestion && onFallback && (
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="hebrew-text text-sm font-medium text-blue-800 mb-3">
-              אפשרויות מומלצות לפתרון הבעיה:
-            </p>
-            <div className="space-y-2">
-              {fallbackSuggestion === 'simple-load' && (
-                <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => onFallback('simple-load')}
-                    className="hebrew-text w-full bg-white"
-                    size="sm"
-                  >
-                    <RefreshCw size={14} />
-                    טען במצב פשוט (ללא אלמנטים מורכבים)
-                  </Button>
-                  <p className="hebrew-text text-xs text-blue-600">
-                    מומלץ לקבצים עם גרפיקה מורכבת או בעיות רינדור
-                  </p>
-                </div>
-              )}
-              
-              {fallbackSuggestion === 'new-tab' && (
-                <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => onFallback('new-tab')}
-                    className="hebrew-text w-full bg-white"
-                    size="sm"
-                  >
-                    <ExternalLink size={14} />
-                    פתח בטאב חדש
-                  </Button>
-                  <p className="hebrew-text text-xs text-blue-600">
-                    מומלץ לבעיות רשת או קבצים גדולים
-                  </p>
-                </div>
-              )}
-              
-              {fallbackSuggestion === 'download-only' && (
-                <div className="space-y-2">
-                  <Button 
-                    variant="outline" 
-                    onClick={() => onFallback('download-only')}
-                    className="hebrew-text w-full bg-white"
-                    size="sm"
-                  >
-                    <Download size={14} />
-                    הורד לצפייה במחשב
-                  </Button>
-                  <p className="hebrew-text text-xs text-blue-600">
-                    מומלץ לקבצים מוגנים או עם בעיות תאימות
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        <p className="hebrew-text text-xs text-muted-foreground mt-4">
-          אם הבעיה נמשכת, נסה להוריד את הקובץ ולפתוח אותו במחשב
+        <p className="hebrew-text text-xs text-muted-foreground">
+          אם הבעיה נמשכת, פתח את הקובץ בטאב חדש או הורד אותו למחשב
         </p>
       </div>
     );
@@ -170,7 +98,6 @@ const PDFViewerContent = ({
           console.error('❌ PDF Document load error (Full object):', error);
           console.error('❌ Error message:', error.message);
           console.error('❌ Error name:', error.name);
-          console.error('❌ Error stack:', error.stack);
           onDocumentLoadError(error);
         }}
         onLoadProgress={onDocumentLoadProgress}
