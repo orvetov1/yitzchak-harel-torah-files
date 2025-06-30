@@ -30,7 +30,9 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     goToNextPage,
     zoomIn,
     zoomOut,
-    setPage
+    setPage,
+    cancelLoading,
+    retryLoading
   } = usePDFViewer(fileUrl, isOpen);
 
   const handleDownload = async () => {
@@ -50,29 +52,42 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
     }
   };
 
+  const handleCancel = () => {
+    cancelLoading();
+    onClose();
+  };
+
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if (!isOpen) return;
     
     switch (event.key) {
       case 'Escape':
-        onClose();
+        if (loading) {
+          handleCancel();
+        } else {
+          onClose();
+        }
         break;
       case 'ArrowLeft':
-        goToPrevPage();
+        if (!loading) goToPrevPage();
         break;
       case 'ArrowRight':
-        goToNextPage();
+        if (!loading) goToNextPage();
         break;
       case '+':
-        event.preventDefault();
-        zoomIn();
+        if (!loading) {
+          event.preventDefault();
+          zoomIn();
+        }
         break;
       case '-':
-        event.preventDefault();
-        zoomOut();
+        if (!loading) {
+          event.preventDefault();
+          zoomOut();
+        }
         break;
     }
-  }, [isOpen, onClose, goToPrevPage, goToNextPage, zoomIn, zoomOut]);
+  }, [isOpen, loading, onClose, goToPrevPage, goToNextPage, zoomIn, zoomOut, handleCancel]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -90,11 +105,16 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
           numPages={numPages}
           loading={loading}
           error={error}
-          onClose={onClose}
+          onClose={loading ? handleCancel : onClose}
           onDownload={handleDownload}
         />
 
-        {loading && <PDFViewerProgress loadingProgress={loadingProgress} />}
+        {loading && (
+          <PDFViewerProgress 
+            loadingProgress={loadingProgress} 
+            onCancel={handleCancel}
+          />
+        )}
 
         {!loading && !error && (
           <PDFViewerControls
@@ -121,6 +141,7 @@ const PDFViewer = ({ fileUrl, fileName, isOpen, onClose }: PDFViewerProps) => {
             onDocumentLoadSuccess={onDocumentLoadSuccess}
             onDocumentLoadError={onDocumentLoadError}
             onDocumentLoadProgress={onDocumentLoadProgress}
+            onRetry={retryLoading}
           />
         </div>
 

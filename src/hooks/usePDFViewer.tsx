@@ -18,21 +18,8 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
   const [pageLoading, setPageLoading] = useState<boolean>(false);
   
   const cacheRef = useRef<DocumentCache>({});
-  const loadingIntervalRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Simulate loading progress for better UX
-  const simulateLoadingProgress = useCallback(() => {
-    setLoadingProgress(0);
-    let progress = 0;
-    
-    loadingIntervalRef.current = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress > 90) {
-        progress = 90;
-      }
-      setLoadingProgress(progress);
-    }, 100);
-  }, []);
+  const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const progressTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     setNumPages(numPages);
@@ -40,39 +27,104 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     setLoadingProgress(100);
     setError(null);
     
+    // Clear all timeouts
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+    if (progressTimeoutRef.current) {
+      clearTimeout(progressTimeoutRef.current);
+      progressTimeoutRef.current = null;
+    }
+    
     // Cache document info
     cacheRef.current[fileUrl] = {
       numPages,
       loadedAt: Date.now()
     };
 
-    // Clear loading interval
-    if (loadingIntervalRef.current) {
-      clearInterval(loadingIntervalRef.current);
-      loadingIntervalRef.current = null;
-    }
-
     console.log(`PDF loaded successfully: ${numPages} pages`);
   }, [fileUrl]);
 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('Error loading PDF:', error);
-    setError('שגיאה בטעינת הקובץ');
+    setError('שגיאה בטעינת הקובץ - נסה לפתוח בטאב חדש');
     setLoading(false);
     setLoadingProgress(0);
     
-    if (loadingIntervalRef.current) {
-      clearInterval(loadingIntervalRef.current);
-      loadingIntervalRef.current = null;
+    // Clear timeouts
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+    if (progressTimeoutRef.current) {
+      clearTimeout(progressTimeoutRef.current);
+      progressTimeoutRef.current = null;
     }
   }, []);
 
   const onDocumentLoadProgress = useCallback(({ loaded, total }: { loaded: number; total: number }) => {
     if (total > 0) {
-      const progress = (loaded / total) * 100;
-      setLoadingProgress(Math.min(progress, 90));
+      const progress = Math.min((loaded / total) * 100, 100);
+      setLoadingProgress(progress);
+      
+      // Clear progress timeout if we have real progress
+      if (progressTimeoutRef.current) {
+        clearTimeout(progressTimeoutRef.current);
+        progressTimeoutRef.current = null;
+      }
+      
+      console.log(`Loading progress: ${Math.round(progress)}%`);
     }
   }, []);
+
+  const handleLoadingTimeout = useCallback(() => {
+    console.warn('PDF loading timeout - forcing completion or error');
+    setError('טעינת הקובץ נמשכת יותר מדי - נסה לפתוח בטאב חדש');
+    setLoading(false);
+    setLoadingProgress(0);
+  }, []);
+
+  const cancelLoading = useCallback(() => {
+    setError('הטעינה בוטלה');
+    setLoading(false);
+    setLoadingProgress(0);
+    
+    // Clear all timeouts
+    if (loadingTimeoutRef.current) {
+      clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
+    if (progressTimeoutRef.current) {
+      clearTimeout(progressTimeoutRef.current);
+      progressTimeoutRef.current = null;
+    }
+  }, []);
+
+  const retryLoading = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setLoadingProgress(0);
+    
+    // Set loading timeout
+    loadingTimeoutRef.current = setTimeout(handleLoadingTimeout, 30000);
+    
+    // Set fallback progress for better UX
+    let progress = 0;
+    const updateProgress = () => {
+      progress += Math.random() * 8 + 2;
+      if (progress > 85) {
+        progress = 85; // Stop at 85% to let real progress take over
+      }
+      setLoadingProgress(progress);
+      
+      if (progress < 85) {
+        progressTimeoutRef.current = setTimeout(updateProgress, 200);
+      }
+    };
+    
+    progressTimeoutRef.current = setTimeout(updateProgress, 100);
+  }, [handleLoadingTimeout]);
 
   const goToPrevPage = () => {
     setPageNumber(prev => Math.max(1, prev - 1));
@@ -111,18 +163,29 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
         setLoadingProgress(100);
         console.log('Using cached PDF data');
       } else {
-        setLoading(true);
-        setLoadingProgress(0);
-        simulateLoadingProgress();
+        retryLoading();
+      }
+    } else {
+      // Clear timeouts when closing
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+      if (progressTimeoutRef.current) {
+        clearTimeout(progressTimeoutRef.current);
+        progressTimeoutRef.current = null;
       }
     }
-  }, [isOpen, fileUrl, simulateLoadingProgress]);
+  }, [isOpen, fileUrl, retryLoading]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (loadingIntervalRef.current) {
-        clearInterval(loadingIntervalRef.current);
+      if (loadingTimeoutRef.current) {
+        clearTimeout(loadingTimeoutRef.current);
+      }
+      if (progressTimeoutRef.current) {
+        clearTimeout(progressTimeoutRef.current);
       }
     };
   }, []);
@@ -143,6 +206,8 @@ export const usePDFViewer = (fileUrl: string, isOpen: boolean) => {
     goToNextPage,
     zoomIn,
     zoomOut,
-    setPage
+    setPage,
+    cancelLoading,
+    retryLoading
   };
 };
