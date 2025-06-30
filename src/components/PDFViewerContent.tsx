@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-console.log('PDF.js worker configured to use local file (no external CDN)');
+console.log('PDF.js worker configured to use local file (optimized for performance)');
 
 interface PDFViewerContentProps {
   fileUrl: string;
@@ -13,6 +13,7 @@ interface PDFViewerContentProps {
   scale: number;
   loading: boolean;
   error: string | null;
+  fileSize?: number;
   setPageLoading: (loading: boolean) => void;
   onDocumentLoadSuccess: ({ numPages }: { numPages: number }) => void;
   onDocumentLoadError: (error: Error) => void;
@@ -26,12 +27,43 @@ const PDFViewerContent = ({
   scale,
   loading,
   error,
+  fileSize = 0,
   setPageLoading,
   onDocumentLoadSuccess,
   onDocumentLoadError,
   onDocumentLoadProgress,
   onRetry
 }: PDFViewerContentProps) => {
+  // Dynamic optimization based on file size
+  const getOptimizedSettings = () => {
+    const fileSizeMB = fileSize / (1024 * 1024);
+    
+    if (fileSizeMB > 5) {
+      // Large files - aggressive optimization
+      return {
+        maxImageSize: 1024 * 1024, // 1MB
+        disableRange: true,
+        disableStream: true,
+      };
+    } else if (fileSizeMB > 2) {
+      // Medium files - balanced optimization
+      return {
+        maxImageSize: 2 * 1024 * 1024, // 2MB
+        disableRange: false,
+        disableStream: false,
+      };
+    } else {
+      // Small files - minimal optimization for best quality
+      return {
+        maxImageSize: 4 * 1024 * 1024, // 4MB
+        disableRange: false,
+        disableStream: false,
+      };
+    }
+  };
+
+  const optimizedSettings = getOptimizedSettings();
+
   if (loading) {
     return (
       <div className="text-center hebrew-text space-y-4 p-8">
@@ -39,14 +71,21 @@ const PDFViewerContent = ({
         <div className="space-y-2">
           <div className="hebrew-text text-xl font-medium">מכין את הקובץ...</div>
           <div className="hebrew-text text-sm text-muted-foreground">
-            טוען ממשאבים מקומיים
+            טוען ממשאבים מקומיים (מותאם לביצועים)
           </div>
+          {fileSize > 0 && (
+            <div className="hebrew-text text-xs text-muted-foreground">
+              גודל קובץ: {Math.round(fileSize / 1024)}KB
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   if (error) {
+    const isSimpleError = error.includes('שגיאה בטעינת הקובץ');
+    
     return (
       <div className="text-center hebrew-text space-y-4 p-8">
         <div className="text-red-600 text-lg font-medium">{error}</div>
@@ -58,7 +97,7 @@ const PDFViewerContent = ({
           >
             פתח בטאב חדש
           </Button>
-          {onRetry && (
+          {onRetry && !isSimpleError && (
             <Button 
               variant="default" 
               onClick={onRetry}
@@ -67,9 +106,24 @@ const PDFViewerContent = ({
               נסה שוב
             </Button>
           )}
+          {isSimpleError && (
+            <Button 
+              variant="secondary" 
+              onClick={() => {
+                console.log('Attempting simple load fallback');
+                window.open(fileUrl, '_blank');
+              }}
+              className="hebrew-text text-sm"
+            >
+              טעינה פשוטה
+            </Button>
+          )}
         </div>
         <p className="hebrew-text text-xs text-muted-foreground">
-          אם הבעיה נמשכת, פתח את הקובץ בטאב חדש או הורד אותו למחשב
+          {isSimpleError 
+            ? 'קובץ זה דורש טעינה מיוחדת - השתמש ב"טעינה פשוטה" או פתח בטאב חדש'
+            : 'אם הבעיה נמשכת, פתח את הקובץ בטאב חדש או הורד אותו למחשב'
+          }
         </p>
       </div>
     );
@@ -84,29 +138,32 @@ const PDFViewerContent = ({
         onLoadProgress={onDocumentLoadProgress}
         loading={null}
         options={{
-          // Optimized settings for local-only resources
+          // Performance-optimized settings
           verbosity: 0,
-          maxImageSize: 1024 * 1024 * 4, // 4MB max image size - reduced from 8MB
+          ...optimizedSettings,
           disableFontFace: false,
-          disableRange: false,
-          disableStream: false,
-          // Disable external CDN dependencies for better reliability
+          // Local-only resources for maximum reliability
           cMapUrl: '',
           cMapPacked: false,
           standardFontDataUrl: '',
           useSystemFonts: true,
-          enableXfa: false, // Disable XFA to avoid potential external dependencies
+          enableXfa: false,
+          // Enhanced rendering settings
+          renderInteractiveForms: false,
+          isEvalSupported: false,
         }}
       >
         <Page
           pageNumber={pageNumber}
           scale={scale}
           onLoadStart={() => {
-            console.log(`Loading page ${pageNumber} with local resources`);
+            const startTime = performance.now();
+            console.log(`Loading page ${pageNumber} (size: ${Math.round(fileSize / 1024)}KB) - Start time: ${startTime}`);
             setPageLoading(true);
           }}
           onLoadSuccess={() => {
-            console.log(`Page ${pageNumber} loaded successfully from local resources`);
+            const endTime = performance.now();
+            console.log(`Page ${pageNumber} loaded successfully - Load time: ${endTime}ms`);
             setPageLoading(false);
           }}
           onLoadError={(error) => {
@@ -118,11 +175,16 @@ const PDFViewerContent = ({
               <div className="space-y-2">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
                 <div>טוען עמוד {pageNumber}...</div>
+                <div className="text-xs text-muted-foreground">
+                  (מותאם לביצועים)
+                </div>
               </div>
             </div>
           }
           renderTextLayer={true}
           renderAnnotationLayer={true}
+          // Optimized canvas settings
+          canvasBackground="white"
         />
       </Document>
     </div>
