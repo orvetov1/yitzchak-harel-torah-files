@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAdmin } from '../hooks/useAdmin';
@@ -33,6 +32,29 @@ interface Category {
   name: string;
   slug: string;
 }
+
+// Function to sanitize file names for storage
+const sanitizeFileName = (fileName: string): string => {
+  // Get file extension
+  const extensionMatch = fileName.match(/\.[^.]+$/);
+  const extension = extensionMatch ? extensionMatch[0] : '';
+  
+  // Remove extension from name for processing
+  const nameWithoutExt = fileName.replace(/\.[^.]+$/, '');
+  
+  // Replace Hebrew characters and special characters with safe alternatives
+  const sanitized = nameWithoutExt
+    .replace(/[א-ת]/g, '') // Remove Hebrew characters
+    .replace(/[^\w\-_.]/g, '-') // Replace non-alphanumeric with dash
+    .replace(/[-_]{2,}/g, '-') // Replace multiple dashes/underscores with single dash
+    .replace(/^[-_]+|[-_]+$/g, '') // Remove leading/trailing dashes
+    .toLowerCase();
+  
+  // If name becomes empty after sanitization, use timestamp
+  const finalName = sanitized || 'file';
+  
+  return `${finalName}${extension}`;
+};
 
 const AdminDashboard = () => {
   const { adminUser, logout, changePassword, isAuthenticated } = useAdmin();
@@ -105,18 +127,27 @@ const AdminDashboard = () => {
 
     setIsUploading(true);
     try {
+      // Create sanitized file name for storage
+      const sanitizedFileName = sanitizeFileName(uploadFile.name);
+      const storageFileName = `${Date.now()}-${sanitizedFileName}`;
+      
+      console.log('Original file name:', uploadFile.name);
+      console.log('Sanitized file name:', storageFileName);
+
       // Upload file to storage
-      const fileName = `${Date.now()}-${uploadFile.name}`;
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('pdf-files')
-        .upload(fileName, uploadFile);
+        .upload(storageFileName, uploadFile);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw uploadError;
+      }
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('pdf-files')
-        .getPublicUrl(fileName);
+        .getPublicUrl(storageFileName);
 
       // Save file info to database
       const { error: dbError } = await supabase
@@ -125,23 +156,31 @@ const AdminDashboard = () => {
           title: uploadTitle,
           description: uploadDescription,
           file_path: publicUrl,
-          file_name: uploadFile.name,
+          file_name: uploadFile.name, // Keep original name for display
           category_id: uploadCategory,
           file_size: uploadFile.size,
           uploaded_by: adminUser?.id
         });
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('Database insert error:', dbError);
+        throw dbError;
+      }
 
       toast.success('הקובץ הועלה בהצלחה');
       setUploadTitle('');
       setUploadDescription('');
       setUploadCategory('');
       setUploadFile(null);
+      
+      // Reset file input
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
       loadData();
     } catch (error) {
       console.error('Upload error:', error);
-      toast.error('שגיאה בהעלאת הקובץ');
+      toast.error(`שגיאה בהעלאת הקובץ: ${error.message || 'שגיאה לא ידועה'}`);
     } finally {
       setIsUploading(false);
     }
