@@ -16,14 +16,35 @@ interface PDFListProps {
 }
 
 const PDFList = ({ items, category }: PDFListProps) => {
-  const handleDownload = (filePath: string, fileName: string) => {
-    // Create a temporary link element for download
-    const link = document.createElement('a');
-    link.href = filePath;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const handleDownload = async (filePath: string, fileName: string) => {
+    try {
+      // Use fetch to download the file properly
+      const response = await fetch(filePath);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create a temporary link element for download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      link.style.display = 'none';
+      
+      // Add to document, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Fallback: open in new tab if download fails
+      window.open(filePath, '_blank');
+    }
   };
 
   const handleView = (filePath: string) => {
