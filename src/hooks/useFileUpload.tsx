@@ -13,29 +13,58 @@ interface UploadFileParams {
 
 // Function to sanitize file names for storage
 const sanitizeFileName = (fileName: string): string => {
+  console.log('🔧 Starting sanitizeFileName with:', fileName);
+  
   // Get file extension
   const extensionMatch = fileName.match(/\.[^.]+$/);
   const extension = extensionMatch ? extensionMatch[0] : '';
+  console.log('📁 Extension found:', extension);
   
   // Remove extension from name for processing
   const nameWithoutExt = fileName.replace(/\.[^.]+$/, '');
+  console.log('📝 Name without extension:', nameWithoutExt);
   
-  // More comprehensive sanitization:
-  // 1. Replace all non-ASCII characters (including Hebrew, Arabic, etc.)
-  // 2. Replace spaces, parentheses, and other special characters with dash
-  // 3. Clean up multiple dashes and leading/trailing dashes
-  const sanitized = nameWithoutExt
-    .replace(/[^\x00-\x7F]/g, '') // Remove all non-ASCII characters (including Hebrew)
-    .replace(/[\s\(\)\[\]{}]/g, '-') // Replace spaces, parentheses, brackets with dash
-    .replace(/[^\w\-_.]/g, '-') // Replace remaining special characters with dash
-    .replace(/[-_]{2,}/g, '-') // Replace multiple dashes/underscores with single dash
-    .replace(/^[-_]+|[-_]+$/g, '') // Remove leading/trailing dashes
-    .toLowerCase();
+  // Step 1: Remove all non-ASCII characters (Hebrew, Arabic, etc.)
+  const step1 = nameWithoutExt.replace(/[^\x00-\x7F]/g, '');
+  console.log('🌐 After removing non-ASCII:', step1);
+  
+  // Step 2: Replace spaces, parentheses, brackets with dash
+  const step2 = step1.replace(/[\s\(\)\[\]{}]/g, '-');
+  console.log('🔧 After replacing spaces/brackets:', step2);
+  
+  // Step 3: Replace remaining special characters with dash
+  const step3 = step2.replace(/[^\w\-_.]/g, '-');
+  console.log('⚙️ After replacing special chars:', step3);
+  
+  // Step 4: Clean up multiple dashes
+  const step4 = step3.replace(/[-_]{2,}/g, '-');
+  console.log('🧹 After cleaning multiple dashes:', step4);
+  
+  // Step 5: Remove leading/trailing dashes
+  const step5 = step4.replace(/^[-_]+|[-_]+$/g, '');
+  console.log('✂️ After trimming dashes:', step5);
+  
+  // Step 6: Convert to lowercase
+  const sanitized = step5.toLowerCase();
+  console.log('🔤 After lowercase:', sanitized);
   
   // If name becomes empty after sanitization, use timestamp-based name
-  const finalName = sanitized || `file-${Date.now()}`;
+  const finalName = sanitized || `document-${Date.now()}`;
+  console.log('📋 Final name before extension:', finalName);
   
-  return `${finalName}${extension}`;
+  const result = `${finalName}${extension}`;
+  console.log('✅ Final sanitized filename:', result);
+  
+  // Additional validation - ensure no problematic characters remain
+  const hasProblematicChars = /[^\w\-_.]/g.test(result);
+  if (hasProblematicChars) {
+    console.warn('⚠️ Warning: Problematic characters still found, using fallback');
+    const fallbackResult = `file-${Date.now()}${extension}`;
+    console.log('🆘 Fallback filename:', fallbackResult);
+    return fallbackResult;
+  }
+  
+  return result;
 };
 
 export const useFileUpload = () => {
@@ -56,8 +85,15 @@ export const useFileUpload = () => {
       
       console.log('📤 Starting file upload...');
       console.log('Original file name:', file.name);
+      console.log('Sanitized file name:', sanitizedFileName);
       console.log('Storage file name:', storageFileName);
       console.log('File size:', file.size, 'bytes');
+
+      // Additional validation before upload
+      if (storageFileName.includes('undefined') || storageFileName.includes('null')) {
+        console.error('❌ Invalid storage filename detected:', storageFileName);
+        throw new Error('Invalid filename generated');
+      }
 
       // Upload file to storage
       const { data: uploadData, error: uploadError } = await supabase.storage
