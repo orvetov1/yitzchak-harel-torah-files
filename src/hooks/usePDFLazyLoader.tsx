@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -65,37 +64,45 @@ export const usePDFLazyLoader = (
         .select('file_path')
         .eq('pdf_file_id', pdfFileId)
         .eq('page_number', pageNumber)
-        .single();
+        .maybeSingle();
 
       let blobUrl: string;
 
       if (pageData && !pageError) {
+        console.log(`📄 Loading split page ${pageNumber} from:`, pageData.file_path);
+        
         // Use split page
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('pdf-files')
           .download(pageData.file_path);
 
         if (downloadError || !fileData) {
-          throw new Error(`Failed to download page ${pageNumber}`);
+          throw new Error(`Failed to download page ${pageNumber}: ${downloadError?.message}`);
         }
 
         blobUrl = URL.createObjectURL(fileData);
+        console.log(`✅ Split page ${pageNumber} loaded successfully`);
+        
       } else {
-        // Fallback to range request from main PDF
-        const { data: pdfFile } = await supabase
+        console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
+        
+        // Fallback to main PDF file
+        const { data: pdfFile, error: pdfError } = await supabase
           .from('pdf_files')
           .select('file_path')
           .eq('id', pdfFileId)
           .single();
 
-        if (!pdfFile) {
+        if (pdfError || !pdfFile) {
           throw new Error('PDF file not found');
         }
 
-        // This is a simplified range request - in reality you'd need to calculate byte ranges
-        const response = await fetch(pdfFile.file_path);
-        const blob = await response.blob();
-        blobUrl = URL.createObjectURL(blob);
+        // Get public URL for the main PDF
+        const { data } = supabase.storage
+          .from('pdf-files')
+          .getPublicUrl(pdfFile.file_path);
+
+        blobUrl = data.publicUrl;
       }
 
       // Cache the result
@@ -105,10 +112,10 @@ export const usePDFLazyLoader = (
       if (cacheRef.current.size > maxCachedPages) {
         const oldestPage = Math.min(...cacheRef.current.keys());
         const oldUrl = cacheRef.current.get(oldestPage);
-        if (oldUrl) {
+        if (oldUrl && oldUrl.startsWith('blob:')) {
           URL.revokeObjectURL(oldUrl);
-          cacheRef.current.delete(oldestPage);
         }
+        cacheRef.current.delete(oldestPage);
       }
 
       setState(prev => ({
@@ -123,7 +130,7 @@ export const usePDFLazyLoader = (
       console.error(`❌ Failed to load page ${pageNumber}:`, error);
       setState(prev => ({
         ...prev,
-        error: `Failed to load page ${pageNumber}`,
+        error: `Failed to load page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
       }));
       return null;

@@ -1,10 +1,9 @@
-
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 
-// Configure PDF.js worker with correct version matching
-pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
+// Configure PDF.js worker to use local file
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface PDFPageProps {
   pageNumber: number;

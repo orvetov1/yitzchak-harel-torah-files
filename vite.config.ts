@@ -32,5 +32,7 @@ export default defineConfig(({ mode }) => ({
         }
       }
     }
-  }
+  },
+  // Ensure worker files are properly served
+  assetsInclude: ['**/*.worker.js', '**/*.worker.min.js']
 }));
