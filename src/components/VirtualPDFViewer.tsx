@@ -3,7 +3,6 @@ import { Button } from './ui/button';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import VirtualScrollContainer from './VirtualScrollContainer';
 import PDFViewerControlsBar from './PDFViewerControlsBar';
-import '../utils/pdfWorkerLoader';
 
 interface VirtualPDFViewerProps {
   pdfFileId: string;

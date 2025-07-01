@@ -1,28 +1,24 @@
 
 import { pdfjs } from 'react-pdf';
 
-// Configure PDF.js worker with fallback strategy and error handling
+// Configure PDF.js worker for React-PDF v9+ using modern ES Module import
 export const configurePDFWorker = () => {
   try {
-    // Primary: Try to use local worker file
-    pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-    
-    console.log('📄 PDF.js Worker configured with local file:', pdfjs.GlobalWorkerOptions.workerSrc);
-    
-    // Verify worker is accessible by attempting to create a minimal test
-    return true;
-  } catch (error) {
-    console.error('❌ Failed to configure PDF.js worker:', error);
-    
-    // Fallback to CDN version as last resort
-    try {
+    // Use dynamic import with ?url to get the worker URL for Vite/modern bundlers
+    import('pdfjs-dist/build/pdf.worker.min.js?url').then((workerModule) => {
+      pdfjs.GlobalWorkerOptions.workerSrc = workerModule.default;
+      console.log('📄 PDF.js Worker configured with modern ES Module import');
+    }).catch((error) => {
+      console.error('❌ Failed to load PDF worker via ES Module:', error);
+      // Fallback to CDN version as last resort
       pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
       console.warn('⚠️ Using CDN fallback for PDF.js worker');
-      return true;
-    } catch (fallbackError) {
-      console.error('❌ PDF.js worker configuration completely failed:', fallbackError);
-      return false;
-    }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('❌ PDF.js worker configuration completely failed:', error);
+    return false;
   }
 };
 

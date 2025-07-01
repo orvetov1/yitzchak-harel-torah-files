@@ -20,10 +20,13 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Optimize for PDF.js worker loading
+  // Optimize for PDF.js worker loading with React-PDF v9+
   optimizeDeps: {
-    include: ['pdfjs-dist'],
-    exclude: ['pdfjs-dist/build/pdf.worker.min.js']
+    include: [
+      'pdfjs-dist',
+      'pdfjs-dist/build/pdf.worker.min.js'
+    ],
+    exclude: []
   },
   build: {
     rollupOptions: {
@@ -34,9 +37,9 @@ export default defineConfig(({ mode }) => ({
       }
     }
   },
-  // Ensure worker files are properly served
+  // Ensure worker files are properly served and support ES modules
   assetsInclude: ['**/*.worker.js', '**/*.worker.min.js'],
-  // Add worker handling
+  // Modern worker handling for React-PDF v9+
   worker: {
     format: 'es'
   },

@@ -9,10 +9,8 @@ import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
 
-
+// Import modern worker configuration - no duplicate worker setup
 import '../utils/pdfWorkerLoader';
-
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;

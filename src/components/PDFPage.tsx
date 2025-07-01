@@ -1,7 +1,7 @@
+
 import React from 'react';
 import { Document, Page } from 'react-pdf';
 import { Button } from './ui/button';
-import '../utils/pdfWorkerLoader';
 
 interface PDFPageProps {
   pageNumber: number;
@@ -44,8 +44,16 @@ const PDFPage = ({
       {isLoaded && pageUrl && (
         <Document
           file={pageUrl}
-          onLoadSuccess={() => console.log(`✅ Page ${pageNumber} document loaded`)}
-          onLoadError={(error) => console.error(`❌ Page ${pageNumber} load error:`, error)}
+          onLoadSuccess={() => {
+            console.log(`✅ Page ${pageNumber} document loaded with modern worker`);
+          }}
+          onLoadError={(error) => {
+            console.error(`❌ Page ${pageNumber} load error:`, error);
+            // Enhanced error logging for worker issues
+            if (error.message.includes('setup') || error.message.includes('worker')) {
+              console.error('🔧 Worker setup error detected - check PDF.js worker configuration');
+            }
+          }}
           loading={
             <div className="flex items-center justify-center h-96 hebrew-text">
               <div className="text-center space-y-2">
