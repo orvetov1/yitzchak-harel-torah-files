@@ -4,6 +4,13 @@ import { Button } from './ui/button';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import VirtualScrollContainer from './VirtualScrollContainer';
 import PDFViewerControlsBar from './PDFViewerControlsBar';
+import { pdfjs } from 'react-pdf';
+
+// Configure PDF.js worker to use local file
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url,
+).toString();
 
 interface VirtualPDFViewerProps {
   pdfFileId: string;

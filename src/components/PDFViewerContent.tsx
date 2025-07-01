@@ -5,9 +5,11 @@ import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
 
-// Configure PDF.js worker to use local file (copied by Vite plugin)
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-console.log('PDF.js worker configured to use local file with Canvas rendering');
+// Configure PDF.js worker to use local file
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.js',
+  import.meta.url,
+).toString();
 
 interface PDFViewerContentProps {
   fileUrl: string;
