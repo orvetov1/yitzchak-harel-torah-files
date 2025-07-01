@@ -1,10 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
+import { Document, Page } from 'react-pdf';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import { useFullscreen } from '../hooks/useFullscreen';
-import SimplePDFRenderer from './SimplePDFRenderer';
 import PDFTableOfContents from './PDFTableOfContents';
 import EnhancedPDFControls from './EnhancedPDFControls';
 
@@ -77,6 +77,40 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
     onToggleFullscreen: toggleFullscreen,
     isEnabled: true
   });
+
+  const renderPDFPage = (pageNumber: number, pageUrl: string) => {
+    console.log(`🔍 Rendering page ${pageNumber} with direct react-pdf`);
+    
+    return (
+      <div className="bg-white shadow-lg" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
+        <Document
+          file={pageUrl}
+          onLoadSuccess={() => {
+            console.log(`✅ Page ${pageNumber} loaded successfully`);
+          }}
+          onLoadError={(error) => {
+            console.error(`❌ Page ${pageNumber} load error:`, error);
+          }}
+          loading={
+            <div className="flex items-center justify-center h-96 hebrew-text">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <div>טוען עמוד {pageNumber}...</div>
+              </div>
+            </div>
+          }
+        >
+          <Page
+            pageNumber={1}
+            scale={1.0} // Scale handled by container
+            renderTextLayer={false}
+            renderAnnotationLayer={false}
+            className="mx-auto"
+          />
+        </Document>
+      </div>
+    );
+  };
 
   console.log(`📊 VirtualPDFViewer state: currentPage=${currentPage}, totalPages=${totalPages}, loadedPages=${loadedPages.size}, isLoading=${isLoading}`);
 
@@ -160,13 +194,7 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
                     )}
                     
                     {pageUrl && !isPageLoading(pageNumber) && (
-                      <SimplePDFRenderer
-                        pdfUrl={pageUrl}
-                        scale={scale}
-                        onLoadSuccess={() => console.log(`✅ Page ${pageNumber} rendered successfully`)}
-                        onLoadError={(error) => console.error(`❌ Page ${pageNumber} render error:`, error)}
-                        className="w-full"
-                      />
+                      renderPDFPage(pageNumber, pageUrl)
                     )}
                     
                     {!pageUrl && !isPageLoading(pageNumber) && (
