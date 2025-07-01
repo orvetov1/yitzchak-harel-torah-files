@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
+import PDFEmbed from './PDFEmbed';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
@@ -112,6 +112,17 @@ const PDFViewerContent = ({
               </Button>
             )}
           </div>
+        </div>
+        
+        <div className="border-t pt-4">
+          <div className="hebrew-text text-sm font-medium mb-2">או נסה צפייה ישירה:</div>
+          <PDFEmbed
+            src={fileUrl}
+            className="w-full h-64 border rounded"
+            onError={(embedError) => {
+              console.log('❌ PDFEmbed also failed:', embedError);
+            }}
+          />
         </div>
         
         <div className="text-xs text-muted-foreground">

@@ -8,6 +8,7 @@ import { usePDFPages } from '../hooks/usePDFPages';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
+import PDFEmbed from './PDFEmbed';
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
@@ -126,7 +127,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     }
 
     if (viewMode === 'pages' && pages.length > 0) {
-      // Render individual page
+      // Render individual page with PDFEmbed
       const currentPageData = pages.find(p => p.pageNumber === currentPage);
       if (!currentPageData) {
         return (
@@ -138,24 +139,30 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
 
       return (
         <div className="bg-white shadow-lg">
-          <iframe
-            src={`${currentPageData.filePath}#view=FitH`}
-            className="w-full h-full min-h-[600px]"
+          <PDFEmbed
+            src={currentPageData.filePath}
             title={`עמוד ${currentPage}`}
+            className="w-full h-full min-h-[600px]"
+            onError={(error) => {
+              console.error(`❌ Error displaying page ${currentPage}:`, error);
+            }}
           />
         </div>
       );
     }
 
-    // For hybrid and full modes, use the best available URL
+    // For hybrid and full modes, use the best available URL with PDFEmbed
     const effectiveUrl = linearization.getBestUrl();
     
     return (
       <div className="bg-white shadow-lg">
-        <iframe
+        <PDFEmbed
           src={`${effectiveUrl}#page=${currentPage}&view=FitH&zoom=${Math.round(scale * 100)}`}
-          className="w-full h-full min-h-[600px]"
           title={fileName}
+          className="w-full h-full min-h-[600px]"
+          onError={(error) => {
+            console.error('❌ Error displaying PDF:', error);
+          }}
         />
       </div>
     );

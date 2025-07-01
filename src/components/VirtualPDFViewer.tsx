@@ -1,8 +1,8 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
+import PDFEmbed from './PDFEmbed';
 
 interface VirtualPDFViewerProps {
   pdfFileId: string;
@@ -65,7 +65,7 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [updateVisibleRange]);
 
-  // Render page component
+  // Render page component with new PDFEmbed
   const renderPage = (pageNumber: number) => {
     const pageUrl = getPageUrl(pageNumber);
     const isLoaded = isPageLoaded(pageNumber);
@@ -94,11 +94,13 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
         )}
         
         {isLoaded && pageUrl && (
-          <iframe
-            src={`${pageUrl}#view=FitH`}
-            className="w-full h-full min-h-[800px]"
+          <PDFEmbed
+            src={pageUrl}
             title={`עמוד ${pageNumber}`}
-            style={{ border: 'none' }}
+            className="w-full h-full min-h-[800px]"
+            onError={(error) => {
+              console.error(`❌ Error displaying page ${pageNumber}:`, error);
+            }}
           />
         )}
         
