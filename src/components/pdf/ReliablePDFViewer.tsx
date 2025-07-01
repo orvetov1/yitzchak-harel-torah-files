@@ -163,7 +163,7 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
             onLoadError={onDocumentLoadError}
             className="max-w-full"
             options={{
-              cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+              cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/cmaps/',
               cMapPacked: true,
             }}
           >
