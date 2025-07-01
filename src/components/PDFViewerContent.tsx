@@ -1,13 +1,13 @@
+
 import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
-import PDFEmbed from './PDFEmbed';
 
 // Configure PDF.js worker to use local file (copied by Vite plugin)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-console.log('PDF.js worker configured to use local file (no external CDN)');
+console.log('PDF.js worker configured to use local file with Canvas rendering');
 
 interface PDFViewerContentProps {
   fileUrl: string;
@@ -65,7 +65,7 @@ const PDFViewerContent = ({
         <div className="space-y-2">
           <div className="hebrew-text text-xl font-medium">מכין את הקובץ...</div>
           <div className="hebrew-text text-sm text-muted-foreground">
-            מעבד עם משאבים מקומיים
+            עיבוד Canvas במקום plugins
           </div>
         </div>
       </div>
@@ -114,17 +114,6 @@ const PDFViewerContent = ({
           </div>
         </div>
         
-        <div className="border-t pt-4">
-          <div className="hebrew-text text-sm font-medium mb-2">או נסה צפייה ישירה:</div>
-          <PDFEmbed
-            src={fileUrl}
-            className="w-full h-64 border rounded"
-            onError={(embedError) => {
-              console.log('❌ PDFEmbed also failed:', embedError);
-            }}
-          />
-        </div>
-        
         <div className="text-xs text-muted-foreground">
           אם הבעיה נמשכת, נסה להוריד את הקובץ ולפתוח אותו ביישום PDF במחשב
         </div>
@@ -141,11 +130,11 @@ const PDFViewerContent = ({
       <Document
         file={fileUrl}
         onLoadSuccess={(pdf) => {
-          console.log('📄 PDF Document loaded successfully');
+          console.log('📄 PDF Document loaded successfully with Canvas rendering');
           onDocumentLoadSuccess({ numPages: pdf.numPages });
         }}
         onLoadError={(error) => {
-          console.error('❌ PDF Document load error (Full object):', error);
+          console.error('❌ PDF Document load error (Canvas rendering):', error);
           console.error('❌ Error message:', error.message);
           console.error('❌ Error name:', error.name);
           onDocumentLoadError(error);
@@ -154,7 +143,7 @@ const PDFViewerContent = ({
         loading={null}
         options={optimizedOptions}
         onSourceSuccess={() => {
-          console.log('📥 PDF source loaded, starting processing...');
+          console.log('📥 PDF source loaded for Canvas rendering, starting processing...');
           onProcessingStart?.();
         }}
       >
@@ -162,27 +151,28 @@ const PDFViewerContent = ({
           pageNumber={pageNumber}
           scale={scale}
           onLoadStart={() => {
-            console.log(`🔄 Loading page ${pageNumber} with ${complexity.estimatedComplexity} complexity settings`);
+            console.log(`🔄 Loading page ${pageNumber} with Canvas rendering (${complexity.estimatedComplexity} complexity)`);
             setPageLoading(true);
           }}
           onLoadSuccess={() => {
-            console.log(`✅ Page ${pageNumber} loaded successfully`);
+            console.log(`✅ Page ${pageNumber} loaded successfully with Canvas rendering`);
             setPageLoading(false);
           }}
           onLoadError={(error) => {
-            console.error(`❌ Page ${pageNumber} load error:`, error);
+            console.error(`❌ Page ${pageNumber} Canvas rendering error:`, error);
             setPageLoading(false);
           }}
           loading={
             <div className="p-8 text-center hebrew-text flex items-center justify-center min-h-[400px]">
               <div className="space-y-2">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <div>טוען עמוד {pageNumber}...</div>
+                <div>מעבד עמוד {pageNumber} ב-Canvas...</div>
               </div>
             </div>
           }
-          renderTextLayer={complexity.estimatedComplexity !== 'complex'}
-          renderAnnotationLayer={complexity.estimatedComplexity === 'simple'}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          className="mx-auto"
         />
       </Document>
     </div>

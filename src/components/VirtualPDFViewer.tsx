@@ -1,8 +1,12 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
-import PDFEmbed from './PDFEmbed';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface VirtualPDFViewerProps {
   pdfFileId: string;
@@ -12,6 +16,7 @@ interface VirtualPDFViewerProps {
 const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
   const [scale, setScale] = useState(1.0);
   const [visibleRange, setVisibleRange] = useState({ start: 1, end: 3 });
+  const [numPages, setNumPages] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
@@ -65,7 +70,7 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
     return () => container.removeEventListener('scroll', handleScroll);
   }, [updateVisibleRange]);
 
-  // Render page component with new PDFEmbed
+  // Render individual page with react-pdf
   const renderPage = (pageNumber: number) => {
     const pageUrl = getPageUrl(pageNumber);
     const isLoaded = isPageLoaded(pageNumber);
@@ -94,14 +99,34 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
         )}
         
         {isLoaded && pageUrl && (
-          <PDFEmbed
-            src={pageUrl}
-            title={`עמוד ${pageNumber}`}
-            className="w-full h-full min-h-[800px]"
-            onError={(error) => {
-              console.error(`❌ Error displaying page ${pageNumber}:`, error);
-            }}
-          />
+          <Document
+            file={pageUrl}
+            onLoadSuccess={() => console.log(`✅ Page ${pageNumber} document loaded`)}
+            onLoadError={(error) => console.error(`❌ Page ${pageNumber} load error:`, error)}
+            loading={
+              <div className="flex items-center justify-center h-96 hebrew-text">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <div>מכין עמוד {pageNumber}...</div>
+                </div>
+              </div>
+            }
+          >
+            <Page
+              pageNumber={1} // Individual page files only have 1 page
+              scale={scale}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              loading={
+                <div className="flex items-center justify-center h-96 hebrew-text">
+                  <div className="text-center space-y-2">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                    <div>מעבד עמוד {pageNumber}...</div>
+                  </div>
+                </div>
+              }
+            />
+          </Document>
         )}
         
         {!isLoaded && !isLoadingPage && (
@@ -227,7 +252,7 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
       {/* Status bar */}
       <div className="bg-white border-t border-border p-2 text-center">
         <span className="hebrew-text text-xs text-muted-foreground">
-          טעינה חכמה פעילה • עמודים {visibleRange.start}-{visibleRange.end} מתוך {totalPages}
+          עיבוד Canvas פעיל • עמודים {visibleRange.start}-{visibleRange.end} מתוך {totalPages}
           • {loadedPages.size} עמודים בזיכרון
         </span>
       </div>

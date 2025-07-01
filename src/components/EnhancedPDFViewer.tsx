@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, Zap, RefreshCw } from 'lucide-react';
 import { Progress } from './ui/progress';
@@ -8,7 +9,9 @@ import { usePDFPages } from '../hooks/usePDFPages';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
-import PDFEmbed from './PDFEmbed';
+
+// Configure PDF.js worker
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
@@ -22,6 +25,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   const [viewMode, setViewMode] = useState<'hybrid' | 'pages' | 'full' | 'virtual'>('virtual');
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1.0);
+  const [numPages, setNumPages] = useState(0);
   const [loadingStrategy, setLoadingStrategy] = useState<'auto' | 'range' | 'pages' | 'virtual'>('virtual');
   
   const containerRef = useRef<HTMLDivElement>(null);
@@ -76,7 +80,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   }, [linearization]);
 
   const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
-  const goToNextPage = () => setCurrentPage(prev => Math.min(fileInfo?.numPagesTotal || 1, prev + 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(fileInfo?.numPagesTotal || numPages || 1, prev + 1));
   const zoomIn = () => setScale(prev => Math.min(3.0, prev + 0.2));
   const zoomOut = () => setScale(prev => Math.max(0.5, prev - 0.2));
 
@@ -84,7 +88,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     if (viewMode === 'virtual') {
       return (
         <Badge variant="default" className="bg-purple-100 text-purple-800 border-purple-200">
-          🚀 טעינה וירטואלית חכמה
+          🚀 Canvas rendering פעיל
         </Badge>
       );
     }
@@ -127,7 +131,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     }
 
     if (viewMode === 'pages' && pages.length > 0) {
-      // Render individual page with PDFEmbed
+      // Render individual page with react-pdf
       const currentPageData = pages.find(p => p.pageNumber === currentPage);
       if (!currentPageData) {
         return (
@@ -139,38 +143,81 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
 
       return (
         <div className="bg-white shadow-lg">
-          <PDFEmbed
-            src={currentPageData.filePath}
-            title={`עמוד ${currentPage}`}
-            className="w-full h-full min-h-[600px]"
-            onError={(error) => {
-              console.error(`❌ Error displaying page ${currentPage}:`, error);
+          <Document
+            file={currentPageData.filePath}
+            onLoadSuccess={(pdf) => {
+              console.log(`✅ Page ${currentPage} loaded with ${pdf.numPages} pages`);
             }}
-          />
+            onLoadError={(error) => {
+              console.error(`❌ Error loading page ${currentPage}:`, error);
+            }}
+            loading={
+              <div className="flex items-center justify-center h-96 hebrew-text">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <div>טוען עמוד {currentPage}...</div>
+                </div>
+              </div>
+            }
+          >
+            <Page
+              pageNumber={1}
+              scale={scale}
+              renderTextLayer={false}
+              renderAnnotationLayer={false}
+              className="mx-auto"
+            />
+          </Document>
         </div>
       );
     }
 
-    // For hybrid and full modes, use the best available URL with PDFEmbed
+    // For hybrid and full modes, use react-pdf with the best available URL
     const effectiveUrl = linearization.getBestUrl();
     
     return (
       <div className="bg-white shadow-lg">
-        <PDFEmbed
-          src={`${effectiveUrl}#page=${currentPage}&view=FitH&zoom=${Math.round(scale * 100)}`}
-          title={fileName}
-          className="w-full h-full min-h-[600px]"
-          onError={(error) => {
-            console.error('❌ Error displaying PDF:', error);
+        <Document
+          file={effectiveUrl}
+          onLoadSuccess={(pdf) => {
+            setNumPages(pdf.numPages);
+            console.log(`✅ PDF loaded with ${pdf.numPages} pages`);
           }}
-        />
+          onLoadError={(error) => {
+            console.error('❌ Error loading PDF:', error);
+          }}
+          loading={
+            <div className="flex items-center justify-center h-96 hebrew-text">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto"></div>
+                <div>טוען קובץ PDF...</div>
+              </div>
+            </div>
+          }
+        >
+          <Page
+            pageNumber={currentPage}
+            scale={scale}
+            renderTextLayer={false}
+            renderAnnotationLayer={false}
+            className="mx-auto"
+            loading={
+              <div className="flex items-center justify-center h-96 hebrew-text">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <div>טוען עמוד {currentPage}...</div>
+                </div>
+              </div>
+            }
+          />
+        </Document>
       </div>
     );
   };
 
   if (!isOpen) return null;
 
-  const totalPages = fileInfo?.numPagesTotal || pages.length || 1;
+  const totalPages = fileInfo?.numPagesTotal || pages.length || numPages || 1;
 
   // If using virtual mode, render minimal wrapper
   if (viewMode === 'virtual' && pdfFileId) {
@@ -311,7 +358,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
                 onChange={(e) => setViewMode(e.target.value as any)}
                 className="text-xs border border-border rounded px-2 py-1 hebrew-text"
               >
-                <option value="virtual">וירטואלי (מומלץ)</option>
+                <option value="virtual">Canvas וירטואלי (מומלץ)</option>
                 <option value="hybrid">היברידי</option>
                 <option value="pages">עמודים נפרדים</option>
                 <option value="full">קובץ מלא</option>
@@ -328,7 +375,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
         {/* Footer */}
         <div className="bg-white border-t border-border p-2 text-center">
           <span className="hebrew-text text-xs text-muted-foreground">
-            השתמש בחיצים לדפדוף, +/- לזום, ESC לסגירה
+            Canvas rendering פעיל • לא נחסם ע"י Chrome
             {linearization.hasLinearizedVersion && ' • גרסה לינארית פעילה'}
             {viewMode === 'virtual' && ' • טעינה וירטואלית פעילה'}
             {viewMode === 'pages' && ' • טעינה לפי עמודים'}
