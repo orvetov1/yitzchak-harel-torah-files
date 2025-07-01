@@ -1,0 +1,275 @@
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { Button } from './ui/button';
+import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, Zap, RefreshCw } from 'lucide-react';
+import { Progress } from './ui/progress';
+import { usePDFLinearization } from '../hooks/usePDFLinearization';
+import { usePDFPages } from '../hooks/usePDFPages';
+import { Badge } from './ui/badge';
+
+interface EnhancedPDFViewerProps {
+  fileUrl: string;
+  fileName: string;
+  isOpen: boolean;
+  onClose: () => void;
+  pdfFileId?: string;
+}
+
+const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: EnhancedPDFViewerProps) => {
+  const [viewMode, setViewMode] = useState<'hybrid' | 'pages' | 'full'>('hybrid');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [scale, setScale] = useState(1.0);
+  const [loadingStrategy, setLoadingStrategy] = useState<'auto' | 'range' | 'pages'>('auto');
+  
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Use linearization hook
+  const linearization = usePDFLinearization(fileUrl, pdfFileId);
+  
+  // Use pages hook for split PDF functionality
+  const { pages, fileInfo, isLoading: pagesLoading } = usePDFPages(pdfFileId || '');
+
+  // Smart strategy selection
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const selectOptimalStrategy = async () => {
+      // If we have linearized version, prefer hybrid approach
+      if (linearization.hasLinearizedVersion) {
+        setViewMode('hybrid');
+        setLoadingStrategy('range');
+        console.log('📊 Using hybrid strategy with linearized PDF');
+        return;
+      }
+
+      // If we have split pages, use page-by-page loading
+      if (pages.length > 0) {
+        setViewMode('pages');
+        setLoadingStrategy('pages');
+        console.log('📊 Using page-by-page strategy');
+        return;
+      }
+
+      // Fallback to full loading
+      setViewMode('full');
+      setLoadingStrategy('auto');
+      console.log('📊 Using full loading strategy');
+    };
+
+    selectOptimalStrategy();
+  }, [isOpen, linearization.hasLinearizedVersion, pages.length]);
+
+  const handleLinearizeRequest = useCallback(async () => {
+    if (linearization.isLinearizing) return;
+    await linearization.requestLinearization();
+  }, [linearization]);
+
+  const goToPrevPage = () => setCurrentPage(prev => Math.max(1, prev - 1));
+  const goToNextPage = () => setCurrentPage(prev => Math.min(fileInfo?.numPagesTotal || 1, prev + 1));
+  const zoomIn = () => setScale(prev => Math.min(3.0, prev + 0.2));
+  const zoomOut = () => setScale(prev => Math.max(0.5, prev - 0.2));
+
+  const renderStrategyBadge = () => {
+    if (linearization.hasLinearizedVersion) {
+      return (
+        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
+          ✨ לינארי ({linearization.compressionRatio?.toFixed(1)}% חיסכון)
+        </Badge>
+      );
+    }
+    
+    if (linearization.isLinearizing) {
+      return (
+        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 animate-pulse">
+          🔄 מייצר גרסה לינארית...
+        </Badge>
+      );
+    }
+
+    if (pages.length > 0) {
+      return (
+        <Badge variant="outline" className="text-purple-600 border-purple-200">
+          📄 טעינה לפי עמודים ({pages.length})
+        </Badge>
+      );
+    }
+
+    return (
+      <Badge variant="outline" className="text-gray-600">
+        📁 טעינה רגילה
+      </Badge>
+    );
+  };
+
+  const renderContent = () => {
+    if (viewMode === 'pages' && pages.length > 0) {
+      // Render individual page
+      const currentPageData = pages.find(p => p.pageNumber === currentPage);
+      if (!currentPageData) {
+        return (
+          <div className="text-center hebrew-text p-8">
+            <div className="text-red-600">עמוד לא נמצא</div>
+          </div>
+        );
+      }
+
+      return (
+        <div className="bg-white shadow-lg">
+          <iframe
+            src={`${currentPageData.filePath}#view=FitH`}
+            className="w-full h-full min-h-[600px]"
+            title={`עמוד ${currentPage}`}
+          />
+        </div>
+      );
+    }
+
+    // For hybrid and full modes, use the best available URL
+    const effectiveUrl = linearization.getBestUrl();
+    
+    return (
+      <div className="bg-white shadow-lg">
+        <iframe
+          src={`${effectiveUrl}#page=${currentPage}&view=FitH&zoom=${Math.round(scale * 100)}`}
+          className="w-full h-full min-h-[600px]"
+          title={fileName}
+        />
+      </div>
+    );
+  };
+
+  if (!isOpen) return null;
+
+  const totalPages = fileInfo?.numPagesTotal || pages.length || 1;
+
+  return (
+    <div 
+      ref={containerRef}
+      className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm"
+    >
+      <div className="flex flex-col h-full">
+        {/* Header */}
+        <div className="bg-white border-b border-border p-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <h2 className="hebrew-title text-lg font-semibold">{fileName}</h2>
+            <span className="hebrew-text text-sm text-muted-foreground">
+              עמוד {currentPage} מתוך {totalPages}
+            </span>
+            {renderStrategyBadge()}
+          </div>
+          <div className="flex items-center gap-2">
+            {!linearization.hasLinearizedVersion && !linearization.isLinearizing && pdfFileId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLinearizeRequest}
+                className="hebrew-text text-xs"
+                disabled={pagesLoading}
+              >
+                <Zap size={16} className="ml-1" />
+                צור גרסה לינארית
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => window.open(fileUrl, '_blank')}>
+              <Download size={16} />
+            </Button>
+            <Button variant="outline" onClick={onClose}>
+              <X size={16} />
+            </Button>
+          </div>
+        </div>
+
+        {/* Loading indicator for linearization */}
+        {linearization.isLinearizing && (
+          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
+            <div className="hebrew-text text-sm text-blue-800 text-center">
+              🔄 יוצר גרסה לינארית לטעינה מהירה יותר...
+            </div>
+          </div>
+        )}
+
+        {/* Optimization info */}
+        {linearization.hasLinearizedVersion && (
+          <div className="bg-green-50 border-b border-green-200 px-4 py-2">
+            <div className="hebrew-text text-sm text-green-800 text-center">
+              ✨ משתמש בגרסה לינארית - 
+              חיסכון של {linearization.compressionRatio?.toFixed(1)}% בגודל הקובץ
+              ({Math.round((linearization.originalSize || 0) / 1024)}KB → {Math.round((linearization.linearizedSize || 0) / 1024)}KB)
+            </div>
+          </div>
+        )}
+
+        {/* Controls */}
+        <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
+          <Button variant="outline" onClick={goToPrevPage} disabled={currentPage <= 1}>
+            <ChevronRight size={16} />
+          </Button>
+          
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min="1"
+              max={totalPages}
+              value={currentPage}
+              onChange={(e) => {
+                const page = parseInt(e.target.value);
+                if (page >= 1 && page <= totalPages) {
+                  setCurrentPage(page);
+                }
+              }}
+              className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
+            />
+            <span className="hebrew-text text-sm text-muted-foreground">
+              / {totalPages}
+            </span>
+          </div>
+
+          <Button variant="outline" onClick={goToNextPage} disabled={currentPage >= totalPages}>
+            <ChevronLeft size={16} />
+          </Button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
+          <Button variant="outline" onClick={zoomOut} disabled={scale <= 0.5}>
+            <ZoomOut size={16} />
+          </Button>
+          <span className="hebrew-text text-sm text-muted-foreground min-w-12 text-center">
+            {Math.round(scale * 100)}%
+          </span>
+          <Button variant="outline" onClick={zoomIn} disabled={scale >= 3.0}>
+            <ZoomIn size={16} />
+          </Button>
+
+          {/* Strategy selector */}
+          <div className="flex items-center gap-2 ml-4">
+            <select
+              value={viewMode}
+              onChange={(e) => setViewMode(e.target.value as any)}
+              className="text-xs border border-border rounded px-2 py-1 hebrew-text"
+            >
+              <option value="hybrid">היברידי</option>
+              <option value="pages">עמודים נפרדים</option>
+              <option value="full">קובץ מלא</option>
+            </select>
+          </div>
+        </div>
+
+        {/* PDF Content */}
+        <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
+          {renderContent()}
+        </div>
+
+        {/* Footer */}
+        <div className="bg-white border-t border-border p-2 text-center">
+          <span className="hebrew-text text-xs text-muted-foreground">
+            השתמש בחיצים לדפדוף, +/- לזום, ESC לסגירה
+            {linearization.hasLinearizedVersion && ' • גרסה לינארית פעילה'}
+            {viewMode === 'pages' && ' • טעינה לפי עמודים'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EnhancedPDFViewer;

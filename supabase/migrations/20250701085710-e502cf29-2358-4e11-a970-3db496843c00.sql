@@ -11,10 +11,10 @@ ADD COLUMN optimization_completed_at TIMESTAMP WITH TIME ZONE;
 ALTER TABLE pdf_files 
 ALTER COLUMN processing_status SET DEFAULT 'pending';
 
--- Add check constraint for processing_status values
+-- Add check constraint for processing_status values including linearization
 ALTER TABLE pdf_files 
 ADD CONSTRAINT processing_status_check 
-CHECK (processing_status IN ('pending', 'processing', 'completed', 'failed', 'optimizing', 'optimized'));
+CHECK (processing_status IN ('pending', 'processing', 'completed', 'failed', 'optimizing', 'optimized', 'linearizing', 'linearized'));
 
 -- Create index for faster queries on processing status
 CREATE INDEX idx_pdf_files_processing_status ON pdf_files(processing_status);

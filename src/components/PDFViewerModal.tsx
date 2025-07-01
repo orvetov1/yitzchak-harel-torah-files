@@ -5,6 +5,8 @@ import { usePDFViewer } from '../hooks/usePDFViewer';
 import PDFViewerContent from './PDFViewerContent';
 import PDFViewerProgress from './PDFViewerProgress';
 import { usePDFOptimization } from '../hooks/usePDFOptimization';
+import { usePDFLinearization } from '../hooks/usePDFLinearization';
+import EnhancedPDFViewer from './EnhancedPDFViewer';
 
 interface PDFViewerModalProps {
   pdfUrl: string;
@@ -16,11 +18,25 @@ interface PDFViewerModalProps {
 
 const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFViewerModalProps) => {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [useEnhancedViewer, setUseEnhancedViewer] = useState<boolean>(true);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Add optimization hook
-  const optimizationState = usePDFOptimization(pdfUrl, pdfFileId);
-  const effectiveUrl = optimizationState.getBestUrl();
+  // Add linearization hook
+  const linearizationState = usePDFLinearization(pdfUrl, pdfFileId);
+  const effectiveUrl = linearizationState.getBestUrl();
+
+  // Use the enhanced viewer by default, fallback to original if needed
+  if (useEnhancedViewer && isOpen) {
+    return (
+      <EnhancedPDFViewer
+        fileUrl={pdfUrl}
+        fileName={fileName}
+        isOpen={isOpen}
+        onClose={onClose}
+        pdfFileId={pdfFileId}
+      />
+    );
+  }
 
   const {
     numPages,
@@ -47,7 +63,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFVie
     cancelLoading,
     retryLoading,
     continueWaiting
-  } = usePDFViewer(effectiveUrl, isOpen); // Use optimized URL if available
+  } = usePDFViewer(effectiveUrl, isOpen);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -168,29 +184,38 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFVie
                 ({Math.round(fileSize / 1024)}KB)
               </span>
             )}
-            {/* Optimization status indicator */}
-            {optimizationState.hasOptimizedVersion && (
+            {/* Enhanced viewer toggle */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setUseEnhancedViewer(!useEnhancedViewer)}
+              className="hebrew-text text-xs"
+            >
+              {useEnhancedViewer ? '📊 רגיל' : '✨ משופר'}
+            </Button>
+            {/* Linearization status indicator */}
+            {linearizationState.hasLinearizedVersion && (
               <span className="hebrew-text text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
-                ✨ גרסה מותאמת ({optimizationState.compressionRatio?.toFixed(1)}% חיסכון)
+                ✨ גרסה לינארית ({linearizationState.compressionRatio?.toFixed(1)}% חיסכון)
               </span>
             )}
-            {optimizationState.isOptimizing && (
+            {linearizationState.isLinearizing && (
               <span className="hebrew-text text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded animate-pulse">
-                🔄 מייעל קובץ...
+                🔄 יוצר גרסה לינארית...
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Add optimization button if not optimized yet */}
-            {!optimizationState.hasOptimizedVersion && !optimizationState.isOptimizing && pdfFileId && (
+            {/* Add linearization button if not linearized yet */}
+            {!linearizationState.hasLinearizedVersion && !linearizationState.isLinearizing && pdfFileId && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={optimizationState.requestOptimization}
+                onClick={linearizationState.requestLinearization}
                 className="hebrew-text text-xs"
                 disabled={loading}
               >
-                ⚡ ייעל
+                ⚡ צור לינארי
               </Button>
             )}
             <Button variant="outline" onClick={handleDownload} disabled={loading}>
@@ -218,12 +243,12 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFVie
         )}
 
         {/* Show optimization info if using optimized version */}
-        {optimizationState.hasOptimizedVersion && !loading && (
+        {linearizationState.hasLinearizedVersion && !loading && (
           <div className="bg-green-50 border-b border-green-200 px-4 py-2">
             <div className="hebrew-text text-sm text-green-800 text-center">
-              ✨ משתמש בגרסה מותאמת - 
-              חיסכון של {optimizationState.compressionRatio?.toFixed(1)}% בגודל הקובץ
-              ({Math.round((optimizationState.originalSize || 0) / 1024)}KB → {Math.round((optimizationState.optimizedSize || 0) / 1024)}KB)
+              ✨ משתמש בגרסה לינארית - 
+              חיסכון של {linearizationState.compressionRatio?.toFixed(1)}% בגודל הקובץ
+              ({Math.round((linearizationState.originalSize || 0) / 1024)}KB → {Math.round((linearizationState.optimizedSize || 0) / 1024)}KB)
             </div>
           </div>
         )}
@@ -308,7 +333,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFVie
           <span className="hebrew-text text-xs text-muted-foreground">
             השתמש בחיצים לדפדוף, Ctrl+/- לזום, F11 למסך מלא, ESC לסגירה
             {pageLoading && ' • טוען עמוד...'}
-            {optimizationState.hasOptimizedVersion && ' • גרסה מותאמת פעילה'}
+            {linearizationState.hasLinearizedVersion && ' • גרסה לינארית פעילה'}
           </span>
         </div>
       </div>
