@@ -66,6 +66,7 @@ export type Database = {
       pdf_files: {
         Row: {
           category_id: string
+          compression_ratio: number | null
           created_at: string
           description: string | null
           file_name: string
@@ -73,6 +74,10 @@ export type Database = {
           file_size: number | null
           id: string
           num_pages_total: number | null
+          optimization_completed_at: string | null
+          optimized_file_path: string | null
+          optimized_size: number | null
+          original_size: number | null
           processing_status: string | null
           split_at: string | null
           title: string
@@ -81,6 +86,7 @@ export type Database = {
         }
         Insert: {
           category_id: string
+          compression_ratio?: number | null
           created_at?: string
           description?: string | null
           file_name: string
@@ -88,6 +94,10 @@ export type Database = {
           file_size?: number | null
           id?: string
           num_pages_total?: number | null
+          optimization_completed_at?: string | null
+          optimized_file_path?: string | null
+          optimized_size?: number | null
+          original_size?: number | null
           processing_status?: string | null
           split_at?: string | null
           title: string
@@ -96,6 +106,7 @@ export type Database = {
         }
         Update: {
           category_id?: string
+          compression_ratio?: number | null
           created_at?: string
           description?: string | null
           file_name?: string
@@ -103,6 +114,10 @@ export type Database = {
           file_size?: number | null
           id?: string
           num_pages_total?: number | null
+          optimization_completed_at?: string | null
+          optimized_file_path?: string | null
+          optimized_size?: number | null
+          original_size?: number | null
           processing_status?: string | null
           split_at?: string | null
           title?: string
