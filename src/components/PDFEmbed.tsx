@@ -14,11 +14,25 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
   const [embedMethod, setEmbedMethod] = useState<'embed' | 'object' | 'iframe' | 'fallback'>('embed');
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const embedRef = useRef<HTMLEmbedElement>(null);
-  const objectRef = useRef<HTMLObjectElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const timeoutRef = useRef<NodeJS.Timeout>();
 
   console.log(`📄 PDFEmbed rendering with method: ${embedMethod}, src: ${src}`);
+
+  // Clear loading after timeout to prevent infinite loading
+  useEffect(() => {
+    if (isLoading) {
+      timeoutRef.current = setTimeout(() => {
+        console.log('⏰ PDF loading timeout reached, removing loader');
+        setIsLoading(false);
+      }, 8000); // 8 second timeout
+    }
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [isLoading, embedMethod]);
 
   const handleEmbedError = () => {
     console.log('🚫 Embed method failed, trying object method');
@@ -44,6 +58,9 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
     console.log(`✅ PDF loaded successfully with method: ${embedMethod}`);
     setIsLoading(false);
     setHasError(false);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
   };
 
   const openInNewTab = () => {
@@ -58,7 +75,6 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
   };
 
   useEffect(() => {
-    // Reset when src changes
     console.log(`🔄 PDF source changed to: ${src}`);
     setEmbedMethod('embed');
     setHasError(false);
@@ -101,12 +117,11 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
           <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
             <div className="text-center space-y-2">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              <div className="text-gray-600 hebrew-text text-sm">טוען בשיטה חלופית...</div>
+              <div className="text-gray-600 hebrew-text text-sm">טוען PDF...</div>
             </div>
           </div>
         )}
         <iframe
-          ref={iframeRef}
           src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
           title={title}
           className="w-full h-full border-0"
@@ -129,7 +144,6 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
           </div>
         )}
         <object
-          ref={objectRef}
           data={src}
           type="application/pdf"
           className="w-full h-full"
@@ -140,7 +154,7 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
           <div className="flex items-center justify-center bg-gray-50 h-full">
             <div className="text-center space-y-4 p-8">
               <div className="text-gray-600 hebrew-text">
-                טוען קובץ PDF...
+                הקובץ נטען...
               </div>
               <Button onClick={openInNewTab} className="hebrew-text">
                 <ExternalLink size={16} className="ml-2" />
@@ -165,7 +179,6 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
         </div>
       )}
       <embed
-        ref={embedRef}
         src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
         type="application/pdf"
         className="w-full h-full"

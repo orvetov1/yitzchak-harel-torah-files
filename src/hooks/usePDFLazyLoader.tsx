@@ -3,18 +3,19 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LazyLoadState {
-  loadedPages: Map<number, string>; // pageNumber -> blob URL
+  loadedPages: Map<number, string>;
   preloadedPages: Set<number>;
   isLoading: boolean;
   currentPage: number;
   totalPages: number;
   loadingPages: Set<number>;
   error: string | null;
+  fallbackToFullPDF: boolean;
 }
 
 interface LazyLoadOptions {
-  preloadDistance?: number; // Number of pages to preload ahead/behind
-  maxCachedPages?: number; // Maximum pages to keep in memory
+  preloadDistance?: number;
+  maxCachedPages?: number;
   useVirtualScrolling?: boolean;
 }
 
@@ -35,24 +36,22 @@ export const usePDFLazyLoader = (
     currentPage: 1,
     totalPages: 0,
     loadingPages: new Set(),
-    error: null
+    error: null,
+    fallbackToFullPDF: false
   });
 
   const cacheRef = useRef<Map<number, string>>(new Map());
-  const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
   const isInitializedRef = useRef(false);
+  const fullPDFUrlRef = useRef<string | null>(null);
 
-  // Load page data (either from split pages or range request)
   const loadPageData = useCallback(async (pageNumber: number): Promise<string | null> => {
     console.log(`🔄 loadPageData called for page ${pageNumber}`);
     
-    // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
       console.log(`📋 Page ${pageNumber} already cached`);
       return cacheRef.current.get(pageNumber)!;
     }
 
-    // Check if already loading
     if (state.loadingPages.has(pageNumber)) {
       console.log(`⏳ Page ${pageNumber} already loading`);
       return null;
@@ -65,7 +64,22 @@ export const usePDFLazyLoader = (
         loadingPages: new Set([...prev.loadingPages, pageNumber])
       }));
 
-      // First, try to get from split pages
+      // If we're in fallback mode or no split pages exist, use full PDF
+      if (state.fallbackToFullPDF && fullPDFUrlRef.current) {
+        console.log(`📄 Using full PDF URL for page ${pageNumber}`);
+        const url = fullPDFUrlRef.current;
+        cacheRef.current.set(pageNumber, url);
+        
+        setState(prev => ({
+          ...prev,
+          loadedPages: new Map([...prev.loadedPages, [pageNumber, url]]),
+          loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
+        }));
+        
+        return url;
+      }
+
+      // Try to get split page first
       const { data: pageData, error: pageError } = await supabase
         .from('pdf_pages')
         .select('file_path')
@@ -78,7 +92,6 @@ export const usePDFLazyLoader = (
       if (pageData && !pageError) {
         console.log(`📄 Loading split page ${pageNumber} from:`, pageData.file_path);
         
-        // Use split page
         const { data: fileData, error: downloadError } = await supabase.storage
           .from('pdf-files')
           .download(pageData.file_path);
@@ -91,28 +104,33 @@ export const usePDFLazyLoader = (
         console.log(`✅ Split page ${pageNumber} loaded successfully`);
         
       } else {
-        console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
+        console.log(`📄 No split page found for page ${pageNumber}, falling back to full PDF`);
         
-        // Fallback to main PDF file
-        const { data: pdfFile, error: pdfError } = await supabase
-          .from('pdf_files')
-          .select('file_path')
-          .eq('id', pdfFileId)
-          .single();
+        // Get full PDF URL if not cached
+        if (!fullPDFUrlRef.current) {
+          const { data: pdfFile, error: pdfError } = await supabase
+            .from('pdf_files')
+            .select('file_path')
+            .eq('id', pdfFileId)
+            .single();
 
-        if (pdfError || !pdfFile) {
-          throw new Error('PDF file not found');
+          if (pdfError || !pdfFile) {
+            throw new Error('PDF file not found');
+          }
+
+          const { data } = supabase.storage
+            .from('pdf-files')
+            .getPublicUrl(pdfFile.file_path);
+
+          fullPDFUrlRef.current = data.publicUrl;
         }
 
-        // Get public URL for the main PDF
-        const { data } = supabase.storage
-          .from('pdf-files')
-          .getPublicUrl(pdfFile.file_path);
-
-        blobUrl = data.publicUrl;
+        blobUrl = fullPDFUrlRef.current;
+        
+        // Set fallback mode for future requests
+        setState(prev => ({ ...prev, fallbackToFullPDF: true }));
       }
 
-      // Cache the result
       cacheRef.current.set(pageNumber, blobUrl);
 
       // Clean up old cache if needed
@@ -143,9 +161,8 @@ export const usePDFLazyLoader = (
       }));
       return null;
     }
-  }, [pdfFileId, maxCachedPages]);
+  }, [pdfFileId, maxCachedPages, state.loadingPages, state.fallbackToFullPDF]);
 
-  // Preload surrounding pages
   const preloadPages = useCallback(async (centerPage: number) => {
     console.log(`🔄 preloadPages called for center page ${centerPage}`);
     const pagesToPreload = [];
@@ -161,7 +178,6 @@ export const usePDFLazyLoader = (
 
     console.log(`📋 Pages to preload: ${pagesToPreload.join(', ')}`);
 
-    // Load pages in parallel
     const preloadPromises = pagesToPreload.map(async (pageNum) => {
       setState(prev => ({
         ...prev,
@@ -173,31 +189,25 @@ export const usePDFLazyLoader = (
     await Promise.all(preloadPromises);
   }, [preloadDistance, state.totalPages, state.loadedPages, state.preloadedPages, loadPageData]);
 
-  // Navigate to page with smart preloading
   const goToPage = useCallback(async (pageNumber: number) => {
-    console.log(`🎯 goToPage called with pageNumber: ${pageNumber}, current: ${state.currentPage}, total: ${state.totalPages}`);
+    console.log(`🎯 goToPage called with pageNumber: ${pageNumber}`);
     
     if (pageNumber < 1 || (state.totalPages > 0 && pageNumber > state.totalPages)) {
       console.log(`❌ Invalid page number: ${pageNumber}`);
       return;
     }
 
-    // Only update if page actually changed
     if (pageNumber !== state.currentPage) {
       console.log(`📄 Changing page from ${state.currentPage} to ${pageNumber}`);
       setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
 
-      // Load current page
       await loadPageData(pageNumber);
-
-      // Preload surrounding pages
       await preloadPages(pageNumber);
 
       setState(prev => ({ ...prev, isLoading: false }));
     }
   }, [state.currentPage, state.totalPages, loadPageData, preloadPages]);
 
-  // Initialize total pages count - FIX: Remove circular dependency
   useEffect(() => {
     if (!pdfFileId || isInitializedRef.current) return;
     
@@ -222,7 +232,6 @@ export const usePDFLazyLoader = (
 
         isInitializedRef.current = true;
 
-        // Load first page immediately
         if (totalPages > 0) {
           console.log(`🎯 Loading first page automatically`);
           loadPageData(1);
@@ -240,21 +249,15 @@ export const usePDFLazyLoader = (
     initializePagesCount();
   }, [pdfFileId, loadPageData]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       console.log('🧹 Cleaning up PDF lazy loader');
-      // Revoke all blob URLs
       cacheRef.current.forEach(url => {
         if (url.startsWith('blob:')) {
           URL.revokeObjectURL(url);
         }
       });
       cacheRef.current.clear();
-      
-      // Abort all ongoing requests
-      abortControllersRef.current.forEach(controller => controller.abort());
-      abortControllersRef.current.clear();
     };
   }, []);
 

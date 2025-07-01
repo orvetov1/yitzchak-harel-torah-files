@@ -22,17 +22,34 @@ const SimplePDFRenderer = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const timeoutRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
     console.log(`🔄 SimplePDFRenderer loading PDF: ${pdfUrl}`);
     setIsLoading(true);
     setError(null);
-  }, [pdfUrl, retryCount]);
+
+    // Backup timeout to ensure loading state doesn't persist forever
+    timeoutRef.current = setTimeout(() => {
+      console.log('⏰ SimplePDFRenderer timeout - assuming loaded');
+      setIsLoading(false);
+      onLoadSuccess?.();
+    }, 10000); // 10 second backup timeout
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, [pdfUrl, retryCount, onLoadSuccess]);
 
   const handleLoad = () => {
     console.log(`✅ PDF loaded successfully: ${pdfUrl}`);
     setIsLoading(false);
     setError(null);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     onLoadSuccess?.();
   };
 
@@ -40,6 +57,9 @@ const SimplePDFRenderer = ({
     console.error(`❌ ${errorMsg}`);
     setIsLoading(false);
     setError(errorMsg);
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     onLoadError?.(new Error(errorMsg));
   };
 
