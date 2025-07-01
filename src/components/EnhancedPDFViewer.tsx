@@ -8,11 +8,12 @@ import { usePDFPages } from '../hooks/usePDFPages';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
-import '../utils/pdfWorkerLoader';
-import { pdfjs } from 'react-pdf';
+import workerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url'
 
-// Configure PDF.js worker to use local file
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+pdfjs.GlobalWorkerOptions.workerSrc = workerSrc
+
+import '../utils/pdfWorkerLoader';
+
 
 
 interface EnhancedPDFViewerProps {
