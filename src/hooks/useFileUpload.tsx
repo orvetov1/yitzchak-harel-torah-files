@@ -20,16 +20,19 @@ const sanitizeFileName = (fileName: string): string => {
   // Remove extension from name for processing
   const nameWithoutExt = fileName.replace(/\.[^.]+$/, '');
   
-  // Replace Hebrew characters and special characters with safe alternatives
+  // More comprehensive sanitization:
+  // 1. Replace all non-ASCII characters (including Hebrew, Arabic, etc.)
+  // 2. Replace spaces, parentheses, and other special characters with dash
+  // 3. Clean up multiple dashes and leading/trailing dashes
   const sanitized = nameWithoutExt
-    .replace(/[א-ת]/g, '') // Remove Hebrew characters
-    .replace(/[\u0590-\u05FF]/g, '') // Remove all Hebrew Unicode range characters
-    .replace(/[^\w\-_.]/g, '-') // Replace non-alphanumeric with dash
+    .replace(/[^\x00-\x7F]/g, '') // Remove all non-ASCII characters (including Hebrew)
+    .replace(/[\s\(\)\[\]{}]/g, '-') // Replace spaces, parentheses, brackets with dash
+    .replace(/[^\w\-_.]/g, '-') // Replace remaining special characters with dash
     .replace(/[-_]{2,}/g, '-') // Replace multiple dashes/underscores with single dash
     .replace(/^[-_]+|[-_]+$/g, '') // Remove leading/trailing dashes
     .toLowerCase();
   
-  // If name becomes empty after sanitization, use timestamp
+  // If name becomes empty after sanitization, use timestamp-based name
   const finalName = sanitized || `file-${Date.now()}`;
   
   return `${finalName}${extension}`;
