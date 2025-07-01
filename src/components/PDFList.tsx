@@ -1,11 +1,9 @@
-
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Eye, Download } from 'lucide-react';
 import PDFSkeleton from './PDFSkeleton';
 import VirtualPDFViewer from './VirtualPDFViewer';
-import { pdf } from './pdf/PDFViewerModal';
 
 interface PDFItem {
   id: string;
