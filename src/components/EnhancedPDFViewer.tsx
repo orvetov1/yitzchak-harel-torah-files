@@ -1,16 +1,15 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Document, Page } from 'react-pdf';
-import { Button } from './ui/button';
-import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, Zap, RefreshCw } from 'lucide-react';
-import { Progress } from './ui/progress';
 import { usePDFLinearization } from '../hooks/usePDFLinearization';
 import { usePDFPages } from '../hooks/usePDFPages';
-import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
-import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
+import PDFViewerHeader from './pdf/PDFViewerHeader';
+import PDFViewerControls from './pdf/PDFViewerControls';
+import PDFLinearizationBadge from './pdf/PDFLinearizationBadge';
+import PDFStatusBanner from './pdf/PDFStatusBanner';
+import PDFDocumentRenderer from './pdf/PDFDocumentRenderer';
+import PDFViewerFooter from './pdf/PDFViewerFooter';
 import '../utils/pdfWorkerLoader';
-
-// Remove duplicate worker configuration - now handled by pdfWorkerLoader
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
@@ -83,136 +82,17 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   const zoomIn = () => setScale(prev => Math.min(3.0, prev + 0.2));
   const zoomOut = () => setScale(prev => Math.max(0.5, prev - 0.2));
 
-  const renderStrategyBadge = () => {
-    if (viewMode === 'virtual') {
-      return (
-        <Badge variant="default" className="bg-purple-100 text-purple-800 border-purple-200">
-          🚀 Canvas rendering פעיל
-        </Badge>
-      );
-    }
+  const handleDownload = useCallback(() => {
+    window.open(fileUrl, '_blank');
+  }, [fileUrl]);
 
-    if (linearization.hasLinearizedVersion) {
-      return (
-        <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-          ✨ לינארי ({linearization.compressionRatio?.toFixed(1)}% חיסכון)
-        </Badge>
-      );
-    }
-    
-    if (linearization.isLinearizing) {
-      return (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-200 animate-pulse">
-          🔄 מייצר גרסה לינארית...
-        </Badge>
-      );
-    }
+  const handleDocumentLoadSuccess = useCallback((pdf: { numPages: number }) => {
+    // Handle document load success
+  }, []);
 
-    if (pages.length > 0) {
-      return (
-        <Badge variant="outline" className="text-purple-600 border-purple-200">
-          📄 טעינה לפי עמודים ({pages.length})
-        </Badge>
-      );
-    }
-
-    return (
-      <Badge variant="outline" className="text-gray-600">
-        📁 טעינה רגילה
-      </Badge>
-    );
-  };
-
-  const renderContent = () => {
-    // Virtual scrolling mode - new default
-    if (viewMode === 'virtual' && pdfFileId) {
-      return <VirtualPDFViewer pdfFileId={pdfFileId} onClose={onClose} />;
-    }
-
-    if (viewMode === 'pages' && pages.length > 0) {
-      // Render individual page with react-pdf
-      const currentPageData = pages.find(p => p.pageNumber === currentPage);
-      if (!currentPageData) {
-        return (
-          <div className="text-center hebrew-text p-8">
-            <div className="text-red-600">עמוד לא נמצא</div>
-          </div>
-        );
-      }
-
-      return (
-        <div className="bg-white shadow-lg">
-          <Document
-            file={currentPageData.filePath}
-            onLoadSuccess={(pdf) => {
-              console.log(`✅ Page ${currentPage} loaded with ${pdf.numPages} pages`);
-            }}
-            onLoadError={(error) => {
-              console.error(`❌ Error loading page ${currentPage}:`, error);
-            }}
-            loading={
-              <div className="flex items-center justify-center h-96 hebrew-text">
-                <div className="text-center space-y-2">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <div>טוען עמוד {currentPage}...</div>
-                </div>
-              </div>
-            }
-          >
-            <Page
-              pageNumber={1}
-              scale={scale}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-              className="mx-auto"
-            />
-          </Document>
-        </div>
-      );
-    }
-
-    // For hybrid and full modes, use react-pdf with the best available URL
-    const effectiveUrl = linearization.getBestUrl();
-    
-    return (
-      <div className="bg-white shadow-lg">
-        <Document
-          file={effectiveUrl}
-          onLoadSuccess={(pdf) => {
-            setNumPages(pdf.numPages);
-            console.log(`✅ PDF loaded with ${pdf.numPages} pages`);
-          }}
-          onLoadError={(error) => {
-            console.error('❌ Error loading PDF:', error);
-          }}
-          loading={
-            <div className="flex items-center justify-center h-96 hebrew-text">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto"></div>
-                <div>טוען קובץ PDF...</div>
-              </div>
-            </div>
-          }
-        >
-          <Page
-            pageNumber={currentPage}
-            scale={scale}
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-            className="mx-auto"
-            loading={
-              <div className="flex items-center justify-center h-96 hebrew-text">
-                <div className="text-center space-y-2">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <div>טוען עמוד {currentPage}...</div>
-                </div>
-              </div>
-            }
-          />
-        </Document>
-      </div>
-    );
-  };
+  const handleDocumentLoadError = useCallback((error: Error) => {
+    console.error('❌ Error loading PDF:', error);
+  }, []);
 
   if (!isOpen) return null;
 
@@ -227,24 +107,28 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
       >
         <div className="flex flex-col h-full">
           {/* Minimal header for virtual mode */}
-          <div className="bg-white border-b border-border p-4 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <h2 className="hebrew-title text-lg font-semibold">{fileName}</h2>
-              {renderStrategyBadge()}
-            </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={() => window.open(fileUrl, '_blank')}>
-                <Download size={16} />
-              </Button>
-              <Button variant="outline" onClick={onClose}>
-                <X size={16} />
-              </Button>
-            </div>
-          </div>
+          <PDFViewerHeader
+            fileName={fileName}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onDownload={handleDownload}
+            onClose={onClose}
+            canLinearize={false}
+            isLinearizing={linearization.isLinearizing}
+            linearizationBadge={
+              <PDFLinearizationBadge
+                viewMode={viewMode}
+                hasLinearizedVersion={linearization.hasLinearizedVersion}
+                isLinearizing={linearization.isLinearizing}
+                compressionRatio={linearization.compressionRatio}
+                pagesLength={pages.length}
+              />
+            }
+          />
 
           {/* Virtual content */}
           <div className="flex-1">
-            {renderContent()}
+            <VirtualPDFViewer pdfFileId={pdfFileId} onClose={onClose} />
           </div>
         </div>
       </div>
@@ -258,128 +142,70 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     >
       <div className="flex flex-col h-full">
         {/* Header */}
-        <div className="bg-white border-b border-border p-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <h2 className="hebrew-title text-lg font-semibold">{fileName}</h2>
-            <span className="hebrew-text text-sm text-muted-foreground">
-              עמוד {currentPage} מתוך {totalPages}
-            </span>
-            {renderStrategyBadge()}
-          </div>
-          <div className="flex items-center gap-2">
-            {!linearization.hasLinearizedVersion && !linearization.isLinearizing && pdfFileId && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleLinearizeRequest}
-                className="hebrew-text text-xs"
-                disabled={pagesLoading}
-              >
-                <Zap size={16} className="ml-1" />
-                צור גרסה לינארית
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => window.open(fileUrl, '_blank')}>
-              <Download size={16} />
-            </Button>
-            <Button variant="outline" onClick={onClose}>
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
+        <PDFViewerHeader
+          fileName={fileName}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onDownload={handleDownload}
+          onClose={onClose}
+          onLinearizeRequest={handleLinearizeRequest}
+          canLinearize={!linearization.hasLinearizedVersion && !linearization.isLinearizing && !!pdfFileId}
+          isLinearizing={linearization.isLinearizing}
+          linearizationBadge={
+            <PDFLinearizationBadge
+              viewMode={viewMode}
+              hasLinearizedVersion={linearization.hasLinearizedVersion}
+              isLinearizing={linearization.isLinearizing}
+              compressionRatio={linearization.compressionRatio}
+              pagesLength={pages.length}
+            />
+          }
+        />
 
-        {/* Loading indicator for linearization */}
-        {linearization.isLinearizing && (
-          <div className="bg-blue-50 border-b border-blue-200 px-4 py-2">
-            <div className="hebrew-text text-sm text-blue-800 text-center">
-              🔄 יוצר גרסה לינארית לטעינה מהירה יותר...
-            </div>
-          </div>
-        )}
-
-        {/* Optimization info */}
-        {linearization.hasLinearizedVersion && (
-          <div className="bg-green-50 border-b border-green-200 px-4 py-2">
-            <div className="hebrew-text text-sm text-green-800 text-center">
-              ✨ משתמש בגרסה לינארית - 
-              חיסכון של {linearization.compressionRatio?.toFixed(1)}% בגודל הקובץ
-              ({Math.round((linearization.originalSize || 0) / 1024)}KB → {Math.round((linearization.linearizedSize || 0) / 1024)}KB)
-            </div>
-          </div>
-        )}
+        {/* Status banners */}
+        <PDFStatusBanner
+          isLinearizing={linearization.isLinearizing}
+          hasLinearizedVersion={linearization.hasLinearizedVersion}
+          compressionRatio={linearization.compressionRatio}
+          originalSize={linearization.originalSize}
+          linearizedSize={linearization.linearizedSize}
+        />
 
         {/* Controls */}
         {viewMode !== 'virtual' && (
-          <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
-            <Button variant="outline" onClick={goToPrevPage} disabled={currentPage <= 1}>
-              <ChevronRight size={16} />
-            </Button>
-            
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1"
-                max={totalPages}
-                value={currentPage}
-                onChange={(e) => {
-                  const page = parseInt(e.target.value);
-                  if (page >= 1 && page <= totalPages) {
-                    setCurrentPage(page);
-                  }
-                }}
-                className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
-              />
-              <span className="hebrew-text text-sm text-muted-foreground">
-                / {totalPages}
-              </span>
-            </div>
-
-            <Button variant="outline" onClick={goToNextPage} disabled={currentPage >= totalPages}>
-              <ChevronLeft size={16} />
-            </Button>
-
-            <div className="w-px h-6 bg-border mx-2" />
-
-            <Button variant="outline" onClick={zoomOut} disabled={scale <= 0.5}>
-              <ZoomOut size={16} />
-            </Button>
-            <span className="hebrew-text text-sm text-muted-foreground min-w-12 text-center">
-              {Math.round(scale * 100)}%
-            </span>
-            <Button variant="outline" onClick={zoomIn} disabled={scale >= 3.0}>
-              <ZoomIn size={16} />
-            </Button>
-
-            {/* Strategy selector */}
-            <div className="flex items-center gap-2 ml-4">
-              <select
-                value={viewMode}
-                onChange={(e) => setViewMode(e.target.value as any)}
-                className="text-xs border border-border rounded px-2 py-1 hebrew-text"
-              >
-                <option value="virtual">Canvas וירטואלי (מומלץ)</option>
-                <option value="hybrid">היברידי</option>
-                <option value="pages">עמודים נפרדים</option>
-                <option value="full">קובץ מלא</option>
-              </select>
-            </div>
-          </div>
+          <PDFViewerControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            scale={scale}
+            viewMode={viewMode}
+            onPrevPage={goToPrevPage}
+            onNextPage={goToNextPage}
+            onPageChange={setCurrentPage}
+            onZoomIn={zoomIn}
+            onZoomOut={zoomOut}
+            onViewModeChange={setViewMode}
+          />
         )}
 
         {/* PDF Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
-          {renderContent()}
+          <PDFDocumentRenderer
+            viewMode={viewMode}
+            currentPage={currentPage}
+            scale={scale}
+            effectiveUrl={linearization.getBestUrl()}
+            pages={pages}
+            onLoadSuccess={handleDocumentLoadSuccess}
+            onLoadError={handleDocumentLoadError}
+            setNumPages={setNumPages}
+          />
         </div>
 
         {/* Footer */}
-        <div className="bg-white border-t border-border p-2 text-center">
-          <span className="hebrew-text text-xs text-muted-foreground">
-            Canvas rendering פעיל • לא נחסם ע"י Chrome
-            {linearization.hasLinearizedVersion && ' • גרסה לינארית פעילה'}
-            {viewMode === 'virtual' && ' • טעינה וירטואלית פעילה'}
-            {viewMode === 'pages' && ' • טעינה לפי עמודים'}
-          </span>
-        </div>
+        <PDFViewerFooter
+          hasLinearizedVersion={linearization.hasLinearizedVersion}
+          viewMode={viewMode}
+        />
       </div>
     </div>
   );
