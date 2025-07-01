@@ -1,21 +1,26 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, Download, X, Maximize, Minimize, ZoomIn, ZoomOut } from 'lucide-react';
 import { usePDFViewer } from '../hooks/usePDFViewer';
 import PDFViewerContent from './PDFViewerContent';
 import PDFViewerProgress from './PDFViewerProgress';
+import { usePDFOptimization } from '../hooks/usePDFOptimization';
 
 interface PDFViewerModalProps {
   pdfUrl: string;
   fileName: string;
   isOpen: boolean;
   onClose: () => void;
+  pdfFileId?: string; // Add optional PDF file ID for optimization
 }
 
-const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalProps) => {
+const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose, pdfFileId }: PDFViewerModalProps) => {
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Add optimization hook
+  const optimizationState = usePDFOptimization(pdfUrl, pdfFileId);
+  const effectiveUrl = optimizationState.getBestUrl();
 
   const {
     numPages,
@@ -42,7 +47,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
     cancelLoading,
     retryLoading,
     continueWaiting
-  } = usePDFViewer(pdfUrl, isOpen);
+  } = usePDFViewer(effectiveUrl, isOpen); // Use optimized URL if available
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -163,8 +168,31 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
                 ({Math.round(fileSize / 1024)}KB)
               </span>
             )}
+            {/* Optimization status indicator */}
+            {optimizationState.hasOptimizedVersion && (
+              <span className="hebrew-text text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                ✨ גרסה מותאמת ({optimizationState.compressionRatio?.toFixed(1)}% חיסכון)
+              </span>
+            )}
+            {optimizationState.isOptimizing && (
+              <span className="hebrew-text text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded animate-pulse">
+                🔄 מייעל קובץ...
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {/* Add optimization button if not optimized yet */}
+            {!optimizationState.hasOptimizedVersion && !optimizationState.isOptimizing && pdfFileId && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={optimizationState.requestOptimization}
+                className="hebrew-text text-xs"
+                disabled={loading}
+              >
+                ⚡ ייעל
+              </Button>
+            )}
             <Button variant="outline" onClick={handleDownload} disabled={loading}>
               <Download size={16} />
             </Button>
@@ -187,6 +215,17 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
             onCancel={cancelLoading}
             onContinue={continueWaiting}
           />
+        )}
+
+        {/* Show optimization info if using optimized version */}
+        {optimizationState.hasOptimizedVersion && !loading && (
+          <div className="bg-green-50 border-b border-green-200 px-4 py-2">
+            <div className="hebrew-text text-sm text-green-800 text-center">
+              ✨ משתמש בגרסה מותאמת - 
+              חיסכון של {optimizationState.compressionRatio?.toFixed(1)}% בגודל הקובץ
+              ({Math.round((optimizationState.originalSize || 0) / 1024)}KB → {Math.round((optimizationState.optimizedSize || 0) / 1024)}KB)
+            </div>
+          </div>
         )}
 
         {/* Controls - shown when PDF is loaded */}
@@ -249,7 +288,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
         {/* PDF Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
           <PDFViewerContent
-            fileUrl={pdfUrl}
+            fileUrl={effectiveUrl}
             fileSize={fileSize}
             pageNumber={pageNumber}
             scale={scale}
@@ -269,6 +308,7 @@ const PDFViewerModal = ({ pdfUrl, fileName, isOpen, onClose }: PDFViewerModalPro
           <span className="hebrew-text text-xs text-muted-foreground">
             השתמש בחיצים לדפדוף, Ctrl+/- לזום, F11 למסך מלא, ESC לסגירה
             {pageLoading && ' • טוען עמוד...'}
+            {optimizationState.hasOptimizedVersion && ' • גרסה מותאמת פעילה'}
           </span>
         </div>
       </div>
