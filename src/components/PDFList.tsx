@@ -25,6 +25,7 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
   const [viewerOpen, setViewerOpen] = useState(false);
 
   const handleView = (item: PDFItem) => {
+    console.log(`🔍 Opening PDF viewer for item with ID: ${item.id}, category: ${category}`);
     setSelectedPDF(item);
     setViewerOpen(true);
   };
@@ -119,6 +120,7 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
           pdfUrl={selectedPDF.filePath}
           fileName={selectedPDF.title}
           isOpen={viewerOpen}
+          pdfFileId={selectedPDF.id}
           onClose={() => {
             setViewerOpen(false);
             setSelectedPDF(null);

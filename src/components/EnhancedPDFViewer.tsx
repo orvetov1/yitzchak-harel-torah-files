@@ -40,11 +40,17 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     if (!isOpen) return;
 
     const selectOptimalStrategy = async () => {
+      console.log('🔍 PDF Strategy Selection Debug:');
+      console.log('- pdfFileId:', pdfFileId);
+      console.log('- hasLinearizedVersion:', linearization.hasLinearizedVersion);
+      console.log('- pages.length:', pages.length);
+      console.log('- fileUrl:', fileUrl);
+
       // Prefer virtual scrolling with lazy loading as the default
       if (pdfFileId) {
         setViewMode('virtual');
         setLoadingStrategy('virtual');
-        console.log('📊 Using virtual scrolling with lazy loading');
+        console.log('✅ Using virtual scrolling with lazy loading (pdfFileId provided)');
         return;
       }
 
@@ -52,7 +58,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
       if (linearization.hasLinearizedVersion) {
         setViewMode('hybrid');
         setLoadingStrategy('range');
-        console.log('📊 Using hybrid strategy with linearized PDF');
+        console.log('✅ Using hybrid strategy with linearized PDF');
         return;
       }
 
@@ -60,14 +66,15 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
       if (pages.length > 0) {
         setViewMode('pages');
         setLoadingStrategy('pages');
-        console.log('📊 Using page-by-page strategy');
+        console.log('✅ Using page-by-page strategy');
         return;
       }
 
       // Fallback to full loading
       setViewMode('full');
       setLoadingStrategy('auto');
-      console.log('📊 Using full loading strategy');
+      console.log('⚠️ Falling back to full loading strategy');
+      console.log('- Reason: No pdfFileId, no linearized version, no split pages');
     };
 
     selectOptimalStrategy();
