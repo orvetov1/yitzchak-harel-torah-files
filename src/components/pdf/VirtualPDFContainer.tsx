@@ -83,7 +83,7 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
 
   if (error) {
     return (
-      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8">
+      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
         <div className="text-red-600 mb-4 text-lg">{error}</div>
         <Button onClick={onClose} className="hebrew-text">סגור</Button>
       </div>
@@ -92,7 +92,7 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
 
   if (isLoading && totalPages === 0) {
     return (
-      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8">
+      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
         <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-4"></div>
         <div>מכין את הקובץ...</div>
       </div>
@@ -102,7 +102,7 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
   return (
     <div 
       ref={containerRef}
-      className={`flex h-full ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : ''}`}
+      className={`flex h-full ${isFullscreen ? 'fixed inset-0 z-50 bg-white' : 'bg-white'}`}
     >
       {/* Sidebar */}
       {showSidebar && (
@@ -139,7 +139,7 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
               const pageUrl = getPageUrl(pageNumber);
               const isCurrentPage = pageNumber === currentPage;
               
-              console.log(`🔍 Rendering page ${pageNumber}: loaded=${isPageLoaded(pageNumber)}, loading=${isPageLoading(pageNumber)}, url=${pageUrl}, isCurrent=${isCurrentPage}`);
+              console.log(`🔍 Rendering page ${pageNumber}: loaded=${isPageLoaded(pageNumber)}, loading=${isPageLoading(pageNumber)}, url=${pageUrl ? 'available' : 'null'}, isCurrent=${isCurrentPage}`);
               
               return (
                 <VirtualPDFPageRenderer
@@ -167,17 +167,15 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
         />
       </div>
 
-      {/* Close button for fullscreen mode */}
-      {isFullscreen && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onClose}
-          className="absolute top-4 left-4 hebrew-text z-10"
-        >
-          סגור
-        </Button>
-      )}
+      {/* Close button */}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={onClose}
+        className="absolute top-4 left-4 hebrew-text z-10"
+      >
+        סגור
+      </Button>
     </div>
   );
 };

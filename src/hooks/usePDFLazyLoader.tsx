@@ -37,19 +37,30 @@ export const usePDFLazyLoader = (
     error: null
   });
 
-  const { cacheRef, getPageUrl, isPageLoaded, setPageUrl, cleanup: cleanupCache } = usePDFCacheManager();
+  const { cacheRef, getPageUrl, isPageLoaded, setPageUrl, cleanup: cleanupCache, getCacheSize } = usePDFCacheManager();
   const { loadPageData, loadingPages, error: pageLoaderError, cleanup: cleanupLoader } = usePDFPageLoader(pdfFileId);
   const { preloadPages } = usePDFPreloader(preloadDistance, state.totalPages, state.loadedPages);
 
   // Sync cache with state - this is crucial for the UI to update
   useEffect(() => {
-    console.log(`🔄 Syncing cache state: cache size=${cacheRef.current.size}`);
+    const cacheSize = getCacheSize();
+    console.log(`🔄 Syncing cache state: cache size=${cacheSize}, currentPage=${state.currentPage}`);
+    
+    // Create a new Map from the current cache
+    const newLoadedPages = new Map<number, string>();
+    for (let i = 1; i <= state.totalPages; i++) {
+      const url = getPageUrl(i);
+      if (url) {
+        newLoadedPages.set(i, url);
+      }
+    }
+    
     setState(prev => ({
       ...prev,
-      loadedPages: new Map(cacheRef.current),
+      loadedPages: newLoadedPages,
       error: pageLoaderError
     }));
-  }, [cacheRef.current.size, pageLoaderError]);
+  }, [getCacheSize, getPageUrl, state.totalPages, pageLoaderError]);
 
   // Navigate to page with smart preloading
   const goToPage = useCallback(async (pageNumber: number) => {
@@ -63,13 +74,23 @@ export const usePDFLazyLoader = (
     // Update current page immediately
     setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
 
-    // Load current page
-    await loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl);
+    try {
+      // Load current page
+      const url = await loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl);
+      console.log(`✅ Page ${pageNumber} loaded with URL: ${url ? 'available' : 'null'}`);
 
-    // Preload surrounding pages
-    await preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl));
+      // Preload surrounding pages
+      await preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl));
 
-    setState(prev => ({ ...prev, isLoading: false }));
+      setState(prev => ({ ...prev, isLoading: false }));
+    } catch (error) {
+      console.error(`❌ Failed to load page ${pageNumber}:`, error);
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        error: `Failed to load page ${pageNumber}` 
+      }));
+    }
   }, [loadPageData, preloadPages, maxCachedPages, setPageUrl, state.currentPage, state.totalPages]);
 
   // Initialize total pages count
@@ -92,20 +113,23 @@ export const usePDFLazyLoader = (
 
         setState(prev => ({
           ...prev,
-          totalPages: totalPages
+          totalPages: totalPages,
+          isLoading: true
         }));
 
         // Load first page immediately
         if (totalPages > 0) {
           console.log(`🎯 Loading first page automatically`);
-          loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
+          await loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
+          setState(prev => ({ ...prev, isLoading: false }));
         }
 
       } catch (error) {
         console.error('❌ Failed to get pages count:', error);
         setState(prev => ({
           ...prev,
-          error: 'Failed to initialize PDF'
+          error: 'Failed to initialize PDF',
+          isLoading: false
         }));
       }
     };

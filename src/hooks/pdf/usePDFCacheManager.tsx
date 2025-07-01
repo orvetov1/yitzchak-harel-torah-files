@@ -1,16 +1,16 @@
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback } from 'react';
 
 export const usePDFCacheManager = () => {
   const cacheRef = useRef<Map<number, string>>(new Map());
 
-  const getPageUrl = useCallback((pageNumber: number) => {
+  const getPageUrl = useCallback((pageNumber: number): string | null => {
     const url = cacheRef.current.get(pageNumber) || null;
     console.log(`📋 getPageUrl(${pageNumber}): ${url ? 'found' : 'not found'}`);
     return url;
   }, []);
 
-  const isPageLoaded = useCallback((pageNumber: number) => {
+  const isPageLoaded = useCallback((pageNumber: number): boolean => {
     const loaded = cacheRef.current.has(pageNumber);
     console.log(`🔍 isPageLoaded(${pageNumber}): ${loaded}`);
     return loaded;
@@ -19,6 +19,10 @@ export const usePDFCacheManager = () => {
   const setPageUrl = useCallback((pageNumber: number, url: string) => {
     console.log(`✅ setPageUrl(${pageNumber}): ${url}`);
     cacheRef.current.set(pageNumber, url);
+  }, []);
+
+  const getCacheSize = useCallback((): number => {
+    return cacheRef.current.size;
   }, []);
 
   const cleanup = useCallback(() => {
@@ -37,6 +41,7 @@ export const usePDFCacheManager = () => {
     getPageUrl,
     isPageLoaded,
     setPageUrl,
+    getCacheSize,
     cleanup
   };
 };

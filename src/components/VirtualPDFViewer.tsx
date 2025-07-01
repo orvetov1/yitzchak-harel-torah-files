@@ -8,7 +8,11 @@ interface VirtualPDFViewerProps {
 }
 
 const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
-  return <VirtualPDFContainer pdfFileId={pdfFileId} onClose={onClose} />;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+      <VirtualPDFContainer pdfFileId={pdfFileId} onClose={onClose} />
+    </div>
+  );
 };
 
 export default VirtualPDFViewer;

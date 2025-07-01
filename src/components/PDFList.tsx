@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
@@ -21,12 +22,10 @@ interface PDFListProps {
 
 const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
   const [selectedPDF, setSelectedPDF] = useState<PDFItem | null>(null);
-  const [viewerOpen, setViewerOpen] = useState(false);
 
   const handleView = (item: PDFItem) => {
     console.log(`🔍 Opening PDF viewer for item with ID: ${item.id}, category: ${category}`);
     setSelectedPDF(item);
-    setViewerOpen(true);
   };
 
   const handleDownload = async (item: PDFItem) => {
@@ -114,18 +113,11 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
         ))}
       </div>
 
-      {selectedPDF && viewerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-          <div className="flex flex-col h-full">
-            <VirtualPDFViewer 
-              pdfFileId={selectedPDF.id} 
-              onClose={() => {
-                setViewerOpen(false);
-                setSelectedPDF(null);
-              }} 
-            />
-          </div>
-        </div>
+      {selectedPDF && (
+        <VirtualPDFViewer 
+          pdfFileId={selectedPDF.id} 
+          onClose={() => setSelectedPDF(null)} 
+        />
       )}
     </>
   );
