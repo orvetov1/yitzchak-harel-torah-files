@@ -4,7 +4,8 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Eye, Download } from 'lucide-react';
 import PDFSkeleton from './PDFSkeleton';
-import PDFViewerModal from './PDFViewerModal';
+import VirtualPDFViewer from './VirtualPDFViewer';
+import { pdf } from './pdf/PDFViewerModal';
 
 interface PDFItem {
   id: string;
@@ -115,17 +116,18 @@ const PDFList = ({ items, category, isLoading = false }: PDFListProps) => {
         ))}
       </div>
 
-      {selectedPDF && (
-        <PDFViewerModal
-          pdfUrl={selectedPDF.filePath}
-          fileName={selectedPDF.title}
-          isOpen={viewerOpen}
-          pdfFileId={selectedPDF.id}
-          onClose={() => {
-            setViewerOpen(false);
-            setSelectedPDF(null);
-          }}
-        />
+      {selectedPDF && viewerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+          <div className="flex flex-col h-full">
+            <VirtualPDFViewer 
+              pdfFileId={selectedPDF.id} 
+              onClose={() => {
+                setViewerOpen(false);
+                setSelectedPDF(null);
+              }} 
+            />
+          </div>
+        </div>
       )}
     </>
   );

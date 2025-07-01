@@ -8,7 +8,7 @@ import { usePDFFiles } from '../../hooks/usePDFFiles';
 import { usePDFOptimization } from '../../hooks/usePDFOptimization';
 import { useOptimizationPolling } from '../../hooks/useOptimizationPolling';
 import OptimizationStatus from './OptimizationStatus';
-import PDFViewerModal from '../PDFViewerModal';
+import VirtualPDFViewer from '../VirtualPDFViewer';
 
 const OptimizedFilesList = () => {
   const { items, isLoading, error, reload } = usePDFFiles();
@@ -89,13 +89,14 @@ const OptimizedFilesList = () => {
       </Card>
 
       {selectedPDF && (
-        <PDFViewerModal
-          pdfUrl={selectedPDF.filePath}
-          fileName={selectedPDF.title}
-          isOpen={!!selectedPDF}
-          onClose={() => setSelectedPDF(null)}
-          pdfFileId={selectedPDF.id}
-        />
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
+          <div className="flex flex-col h-full">
+            <VirtualPDFViewer
+              pdfFileId={selectedPDF.id}
+              onClose={() => setSelectedPDF(null)}
+            />
+          </div>
+        </div>
       )}
     </>
   );
