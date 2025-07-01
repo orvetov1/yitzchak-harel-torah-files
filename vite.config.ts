@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => ({
   },
   // Optimize for PDF.js worker loading
   optimizeDeps: {
-    include: ['pdfjs-dist']
+    include: ['pdfjs-dist'],
+    exclude: ['pdfjs-dist/build/pdf.worker.min.js']
   },
   build: {
     rollupOptions: {
@@ -34,5 +35,13 @@ export default defineConfig(({ mode }) => ({
     }
   },
   // Ensure worker files are properly served
-  assetsInclude: ['**/*.worker.js', '**/*.worker.min.js']
+  assetsInclude: ['**/*.worker.js', '**/*.worker.min.js'],
+  // Add worker handling
+  worker: {
+    format: 'es'
+  },
+  // Define globals to prevent build issues
+  define: {
+    global: 'globalThis',
+  }
 }));

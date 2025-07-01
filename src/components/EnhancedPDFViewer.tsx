@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, Zap, RefreshCw } from 'lucide-react';
 import { Progress } from './ui/progress';
@@ -10,8 +10,7 @@ import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
 import '../utils/pdfWorkerLoader';
 
-// Configure PDF.js worker to use local file
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+// Remove duplicate worker configuration - now handled by pdfWorkerLoader
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
