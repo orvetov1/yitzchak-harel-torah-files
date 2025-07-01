@@ -10,6 +10,7 @@ import { Upload, FileText } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { TableOfContentsForm } from './TableOfContentsForm';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface Category {
   id: string;
@@ -38,7 +39,8 @@ export const FileUploadForm = ({ categories, onUploadSuccess }: FileUploadFormPr
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [tableOfContents, setTableOfContents] = useState<TableOfContentsItem[]>([]);
-  const [isUploading, setIsUploading] = useState(false);
+  
+  const { uploadFile, isUploading } = useFileUpload();
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -55,76 +57,67 @@ export const FileUploadForm = ({ categories, onUploadSuccess }: FileUploadFormPr
       return;
     }
 
-    setIsUploading(true);
+    console.log('🚀 Starting upload process from FileUploadForm');
+    console.log('Original file name from form:', selectedFile.name);
 
     try {
-      // Upload file to storage
-      const fileName = `${Date.now()}-${selectedFile.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('pdf-files')
-        .upload(fileName, selectedFile);
+      // Use the useFileUpload hook which includes sanitization
+      const success = await uploadFile({
+        file: selectedFile,
+        title: formData.title,
+        description: formData.description,
+        categoryId: formData.categoryId
+      });
 
-      if (uploadError) throw uploadError;
+      if (success) {
+        // Handle table of contents if provided
+        if (tableOfContents.length > 0) {
+          // We need to get the file ID first - let's fetch the most recent file for this category
+          const { data: recentFile, error: fetchError } = await supabase
+            .from('pdf_files')
+            .select('id')
+            .eq('category_id', formData.categoryId)
+            .eq('title', formData.title)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
 
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from('pdf-files')
-        .getPublicUrl(fileName);
+          if (fetchError) {
+            console.error('Error fetching recent file:', fetchError);
+          } else if (recentFile) {
+            const tocInserts = tableOfContents.map(item => ({
+              pdf_file_id: recentFile.id,
+              chapter_title: item.chapter_title,
+              page_number: item.page_number,
+              level: item.level,
+              order_index: item.order_index
+            }));
 
-      // Insert file record
-      const { data: fileData, error: fileError } = await supabase
-        .from('pdf_files')
-        .insert({
-          title: formData.title,
-          description: formData.description,
-          file_name: selectedFile.name,
-          file_path: urlData.publicUrl,
-          file_size: selectedFile.size,
-          category_id: formData.categoryId
-        })
-        .select()
-        .single();
+            const { error: tocError } = await supabase
+              .from('pdf_table_of_contents')
+              .insert(tocInserts);
 
-      if (fileError) throw fileError;
-
-      // Insert table of contents if provided
-      if (tableOfContents.length > 0) {
-        const tocInserts = tableOfContents.map(item => ({
-          pdf_file_id: fileData.id,
-          chapter_title: item.chapter_title,
-          page_number: item.page_number,
-          level: item.level,
-          order_index: item.order_index
-        }));
-
-        const { error: tocError } = await supabase
-          .from('pdf_table_of_contents')
-          .insert(tocInserts);
-
-        if (tocError) {
-          console.error('Error inserting table of contents:', tocError);
-          toast.error('הקובץ הועלה בהצלחה אך הייתה שגיאה בשמירת תוכן העניינים');
+            if (tocError) {
+              console.error('Error inserting table of contents:', tocError);
+              toast.error('הקובץ הועלה בהצלחה אך הייתה שגיאה בשמירת תוכן העניינים');
+            }
+          }
         }
+
+        // Reset form
+        setFormData({ title: '', description: '', categoryId: '' });
+        setSelectedFile(null);
+        setTableOfContents([]);
+        
+        // Reset file input
+        const fileInput = document.getElementById('file-upload') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+
+        onUploadSuccess();
       }
 
-      toast.success('הקובץ הועלה בהצלחה');
-      
-      // Reset form
-      setFormData({ title: '', description: '', categoryId: '' });
-      setSelectedFile(null);
-      setTableOfContents([]);
-      
-      // Reset file input
-      const fileInput = document.getElementById('file-upload') as HTMLInputElement;
-      if (fileInput) fileInput.value = '';
-
-      onUploadSuccess();
-
     } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('שגיאה בהעלאת הקובץ');
-    } finally {
-      setIsUploading(false);
+      console.error('Upload error in FileUploadForm:', error);
     }
   };
 
