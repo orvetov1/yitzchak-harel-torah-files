@@ -22,40 +22,15 @@ const SimplePDFRenderer = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const timeoutRef = useRef<NodeJS.Timeout>();
-
-  console.log(`🔄 SimplePDFRenderer loading PDF: ${pdfUrl}, retry: ${retryCount}`);
 
   useEffect(() => {
     console.log(`🔄 SimplePDFRenderer loading PDF: ${pdfUrl}`);
     setIsLoading(true);
     setError(null);
-
-    // Set a backup timeout to prevent infinite loading
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
-    
-    timeoutRef.current = setTimeout(() => {
-      if (isLoading) {
-        console.log(`⏰ SimplePDFRenderer backup timeout reached for: ${pdfUrl}`);
-        setError('טעינת הקובץ נמשכת יותר מהצפוי');
-        setIsLoading(false);
-      }
-    }, 15000);
-
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
-    };
   }, [pdfUrl, retryCount]);
 
   const handleLoad = () => {
     console.log(`✅ PDF loaded successfully: ${pdfUrl}`);
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
     setIsLoading(false);
     setError(null);
     onLoadSuccess?.();
@@ -63,9 +38,6 @@ const SimplePDFRenderer = ({
 
   const handleError = (errorMsg: string) => {
     console.error(`❌ ${errorMsg}`);
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
     setIsLoading(false);
     setError(errorMsg);
     onLoadError?.(new Error(errorMsg));
@@ -106,7 +78,6 @@ const SimplePDFRenderer = ({
         src={pdfUrl}
         title="PDF Viewer"
         className="w-full h-[800px] rounded-lg shadow-lg"
-        onLoad={handleLoad}
         onError={handleError}
       />
     </div>

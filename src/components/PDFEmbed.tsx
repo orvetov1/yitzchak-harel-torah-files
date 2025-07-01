@@ -7,80 +7,43 @@ interface PDFEmbedProps {
   src: string;
   title?: string;
   className?: string;
-  onLoad?: () => void;
   onError?: (error: string) => void;
 }
 
-const PDFEmbed = ({ src, title = 'PDF Document', className = '', onLoad, onError }: PDFEmbedProps) => {
+const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFEmbedProps) => {
   const [embedMethod, setEmbedMethod] = useState<'embed' | 'object' | 'iframe' | 'fallback'>('embed');
   const [hasError, setHasError] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const embedRef = useRef<HTMLEmbedElement>(null);
+  const objectRef = useRef<HTMLObjectElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   console.log(`📄 PDFEmbed rendering with method: ${embedMethod}, src: ${src}`);
 
-  // Clear any existing timeout
-  const clearLoadingTimeout = () => {
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-      timeoutRef.current = undefined;
-    }
-  };
-
-  // Set a loading timeout to prevent infinite loading
-  const setLoadingTimeout = (duration: number = 8000) => {
-    clearLoadingTimeout();
-    timeoutRef.current = setTimeout(() => {
-      console.log(`⏰ Loading timeout reached for ${embedMethod} method`);
-      handleLoadingTimeout();
-    }, duration);
-  };
-
-  const handleLoadingTimeout = () => {
-    if (embedMethod === 'embed') {
-      console.log('🚫 Embed timeout, trying object method');
-      setEmbedMethod('object');
-    } else if (embedMethod === 'object') {
-      console.log('🚫 Object timeout, trying iframe method');
-      setEmbedMethod('iframe');
-    } else if (embedMethod === 'iframe') {
-      console.log('🚫 Iframe timeout, showing fallback');
-      setEmbedMethod('fallback');
-      setHasError(true);
-      setIsLoading(false);
-      onError?.('לא ניתן להציג את הקובץ בדפדפן');
-    }
-  };
-
-  const handleSuccess = () => {
-    console.log(`✅ PDF loaded successfully with method: ${embedMethod}`);
-    clearLoadingTimeout();
-    setIsLoading(false);
-    setHasError(false);
-    onLoad?.();
-  };
-
   const handleEmbedError = () => {
     console.log('🚫 Embed method failed, trying object method');
-    clearLoadingTimeout();
     setEmbedMethod('object');
     setIsLoading(true);
   };
 
   const handleObjectError = () => {
     console.log('🚫 Object method failed, trying iframe method');
-    clearLoadingTimeout();
     setEmbedMethod('iframe');
     setIsLoading(true);
   };
 
   const handleIframeError = () => {
     console.log('🚫 Iframe method failed, showing fallback');
-    clearLoadingTimeout();
     setEmbedMethod('fallback');
     setHasError(true);
     setIsLoading(false);
     onError?.('PDF cannot be displayed in browser');
+  };
+
+  const handleLoad = () => {
+    console.log(`✅ PDF loaded successfully with method: ${embedMethod}`);
+    setIsLoading(false);
+    setHasError(false);
   };
 
   const openInNewTab = () => {
@@ -94,40 +57,13 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onLoad, onError
     setIsLoading(true);
   };
 
-  // Reset when src changes
   useEffect(() => {
+    // Reset when src changes
     console.log(`🔄 PDF source changed to: ${src}`);
-    clearLoadingTimeout();
     setEmbedMethod('embed');
     setHasError(false);
     setIsLoading(true);
   }, [src]);
-
-  // Set timeout when method changes
-  useEffect(() => {
-    if (embedMethod !== 'fallback' && isLoading) {
-      setLoadingTimeout();
-    }
-    return clearLoadingTimeout;
-  }, [embedMethod, isLoading]);
-
-  // Handle embed method detection - since embed/object don't fire reliable load events,
-  // we'll use a shorter timeout and assume success if no error occurs
-  useEffect(() => {
-    if ((embedMethod === 'embed' || embedMethod === 'object') && isLoading) {
-      const checkTimeout = setTimeout(() => {
-        console.log(`✅ Assuming ${embedMethod} loaded successfully (no error detected)`);
-        handleSuccess();
-      }, 3000); // Shorter timeout for embed/object
-
-      return () => clearTimeout(checkTimeout);
-    }
-  }, [embedMethod, isLoading]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return clearLoadingTimeout;
-  }, []);
 
   if (embedMethod === 'fallback' || hasError) {
     return (
@@ -170,10 +106,11 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onLoad, onError
           </div>
         )}
         <iframe
+          ref={iframeRef}
           src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
           title={title}
           className="w-full h-full border-0"
-          onLoad={handleSuccess}
+          onLoad={handleLoad}
           onError={handleIframeError}
         />
       </div>
@@ -192,10 +129,12 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onLoad, onError
           </div>
         )}
         <object
+          ref={objectRef}
           data={src}
           type="application/pdf"
           className="w-full h-full"
           title={title}
+          onLoad={handleLoad}
           onError={handleObjectError}
         >
           <div className="flex items-center justify-center bg-gray-50 h-full">
@@ -226,10 +165,12 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onLoad, onError
         </div>
       )}
       <embed
+        ref={embedRef}
         src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
         type="application/pdf"
         className="w-full h-full"
         title={title}
+        onLoad={handleLoad}
         onError={handleEmbedError}
       />
     </div>

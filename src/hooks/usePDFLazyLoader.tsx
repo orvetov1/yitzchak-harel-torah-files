@@ -41,11 +41,10 @@ export const usePDFLazyLoader = (
   const cacheRef = useRef<Map<number, string>>(new Map());
   const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
   const isInitializedRef = useRef(false);
-  const mainPdfUrlRef = useRef<string | null>(null);
 
   // Load page data (either from split pages or range request)
   const loadPageData = useCallback(async (pageNumber: number): Promise<string | null> => {
-    console.log(`🔄 loadPageData called for page ${pageNumber}, totalPages: ${state.totalPages}`);
+    console.log(`🔄 loadPageData called for page ${pageNumber}`);
     
     // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
@@ -59,28 +58,12 @@ export const usePDFLazyLoader = (
       return null;
     }
 
-    // If we only have 1 page or no split pages, return the main PDF URL
-    if (state.totalPages === 1 || !mainPdfUrlRef.current) {
-      console.log(`📄 Using main PDF for single page or no splits`);
-      return mainPdfUrlRef.current;
-    }
-
     try {
       console.log(`🚀 Starting to load page ${pageNumber}`);
       setState(prev => ({
         ...prev,
         loadingPages: new Set([...prev.loadingPages, pageNumber])
       }));
-
-      // Set a timeout for page loading
-      const timeoutId = setTimeout(() => {
-        console.log(`⏰ Page ${pageNumber} loading timeout`);
-        setState(prev => ({
-          ...prev,
-          loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber)),
-          error: `טעינת עמוד ${pageNumber} נכשלה`
-        }));
-      }, 10000);
 
       // First, try to get from split pages
       const { data: pageData, error: pageError } = await supabase
@@ -89,8 +72,6 @@ export const usePDFLazyLoader = (
         .eq('pdf_file_id', pdfFileId)
         .eq('page_number', pageNumber)
         .maybeSingle();
-
-      clearTimeout(timeoutId);
 
       let blobUrl: string;
 
@@ -113,11 +94,22 @@ export const usePDFLazyLoader = (
         console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
         
         // Fallback to main PDF file
-        if (mainPdfUrlRef.current) {
-          blobUrl = mainPdfUrlRef.current;
-        } else {
-          throw new Error('No PDF data available');
+        const { data: pdfFile, error: pdfError } = await supabase
+          .from('pdf_files')
+          .select('file_path')
+          .eq('id', pdfFileId)
+          .single();
+
+        if (pdfError || !pdfFile) {
+          throw new Error('PDF file not found');
         }
+
+        // Get public URL for the main PDF
+        const { data } = supabase.storage
+          .from('pdf-files')
+          .getPublicUrl(pdfFile.file_path);
+
+        blobUrl = data.publicUrl;
       }
 
       // Cache the result
@@ -146,12 +138,12 @@ export const usePDFLazyLoader = (
       console.error(`❌ Failed to load page ${pageNumber}:`, error);
       setState(prev => ({
         ...prev,
-        error: `טעינת עמוד ${pageNumber} נכשלה: ${error instanceof Error ? error.message : 'שגיאה לא ידועה'}`,
+        error: `Failed to load page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`,
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
       }));
       return null;
     }
-  }, [pdfFileId, maxCachedPages, state.totalPages]);
+  }, [pdfFileId, maxCachedPages]);
 
   // Preload surrounding pages
   const preloadPages = useCallback(async (centerPage: number) => {
@@ -205,31 +197,23 @@ export const usePDFLazyLoader = (
     }
   }, [state.currentPage, state.totalPages, loadPageData, preloadPages]);
 
-  // Initialize total pages count and main PDF URL
+  // Initialize total pages count - FIX: Remove circular dependency
   useEffect(() => {
     if (!pdfFileId || isInitializedRef.current) return;
     
-    const initializePDF = async () => {
-      console.log(`🚀 Initializing PDF for pdfFileId: ${pdfFileId}`);
+    const initializePagesCount = async () => {
+      console.log(`🚀 Initializing pages count for pdfFileId: ${pdfFileId}`);
       try {
         const { data, error } = await supabase
           .from('pdf_files')
-          .select('num_pages_total, file_path')
+          .select('num_pages_total')
           .eq('id', pdfFileId)
           .single();
 
         if (error) throw error;
 
         const totalPages = data.num_pages_total || 1;
-        
-        // Get the public URL for the main PDF
-        const { data: urlData } = supabase.storage
-          .from('pdf-files')
-          .getPublicUrl(data.file_path);
-        
-        mainPdfUrlRef.current = urlData.publicUrl;
-        
-        console.log(`📊 Total pages found: ${totalPages}, PDF URL: ${mainPdfUrlRef.current}`);
+        console.log(`📊 Total pages found: ${totalPages}`);
 
         setState(prev => ({
           ...prev,
@@ -241,25 +225,19 @@ export const usePDFLazyLoader = (
         // Load first page immediately
         if (totalPages > 0) {
           console.log(`🎯 Loading first page automatically`);
-          const firstPageUrl = await loadPageData(1);
-          if (firstPageUrl) {
-            setState(prev => ({
-              ...prev,
-              loadedPages: new Map([...prev.loadedPages, [1, firstPageUrl]])
-            }));
-          }
+          loadPageData(1);
         }
 
       } catch (error) {
-        console.error('❌ Failed to initialize PDF:', error);
+        console.error('❌ Failed to get pages count:', error);
         setState(prev => ({
           ...prev,
-          error: 'אתחול הקובץ נכשל'
+          error: 'Failed to initialize PDF'
         }));
       }
     };
 
-    initializePDF();
+    initializePagesCount();
   }, [pdfFileId, loadPageData]);
 
   // Cleanup on unmount
