@@ -31,20 +31,24 @@ interface Category {
 }
 
 const AdminDashboard = () => {
-  const { logout, isAuthenticated } = useAdmin();
+  const { logout, isAuthenticated, isLoading: adminLoading } = useAdmin();
   const navigate = useNavigate();
   const [pdfFiles, setPdfFiles] = useState<PDFFile[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/admin');
+    // Only redirect if not loading and not authenticated
+    if (!adminLoading && !isAuthenticated) {
+      navigate('/admin', { replace: true });
       return;
     }
     
-    loadData();
-  }, [isAuthenticated, navigate]);
+    // Load data only if authenticated and not loading
+    if (isAuthenticated && !adminLoading) {
+      loadData();
+    }
+  }, [isAuthenticated, adminLoading, navigate]);
 
   const loadData = async () => {
     try {
@@ -107,10 +111,20 @@ const AdminDashboard = () => {
     }
   };
 
+  // Show loading while checking auth status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="hebrew-text">בודק סטטוס התחברות...</div>
+      </div>
+    );
+  }
+
+  // Show loading while loading data
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="hebrew-text">טוען...</div>
+        <div className="hebrew-text">טוען נתונים...</div>
       </div>
     );
   }

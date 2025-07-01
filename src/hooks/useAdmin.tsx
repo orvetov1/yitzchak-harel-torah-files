@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface AdminUser {
@@ -23,7 +23,7 @@ export const useAdmin = () => {
       }
     }
     setIsLoading(false);
-  }, []); // Empty dependency array to run only once
+  }, []);
 
   const login = async (username: string, password: string) => {
     try {
@@ -34,7 +34,7 @@ export const useAdmin = () => {
         .single();
 
       if (error || !data) {
-        throw new Error('שם משתמש או סיסמה שגויים');
+        throw new Error('שם משתמש או סিסמה שגויים');
       }
 
       // Simple password check (in production, use proper hashing)
@@ -90,12 +90,15 @@ export const useAdmin = () => {
     }
   };
 
+  // Use useMemo to stabilize isAuthenticated value
+  const isAuthenticated = useMemo(() => !!adminUser, [adminUser]);
+
   return {
     adminUser,
     isLoading,
     login,
     logout,
     changePassword,
-    isAuthenticated: !!adminUser
+    isAuthenticated
   };
 };

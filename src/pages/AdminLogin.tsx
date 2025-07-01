@@ -12,14 +12,15 @@ const AdminLogin = () => {
   const [username, setUsername] = useState('HarelAdminYizchak');
   const [password, setPassword] = useState('1234');
   const [isLoading, setIsLoading] = useState(false);
-  const { login, isAuthenticated } = useAdmin();
+  const { login, isAuthenticated, isLoading: adminLoading } = useAdmin();
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/admin/dashboard');
+    // Only redirect if not loading and authenticated
+    if (!adminLoading && isAuthenticated) {
+      navigate('/admin/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, adminLoading, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,13 +30,22 @@ const AdminLogin = () => {
     
     if (result.success) {
       toast.success('התחברת בהצלחה');
-      navigate('/admin/dashboard');
+      // Navigation will be handled by useEffect
     } else {
       toast.error(result.error || 'שגיאה בהתחברות');
     }
     
     setIsLoading(false);
   };
+
+  // Show loading while checking auth status
+  if (adminLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <div className="hebrew-text">בודק סטטוס התחברות...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
