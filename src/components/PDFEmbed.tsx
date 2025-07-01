@@ -11,31 +11,58 @@ interface PDFEmbedProps {
 }
 
 const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFEmbedProps) => {
-  const [embedMethod, setEmbedMethod] = useState<'embed' | 'object' | 'fallback'>('embed');
+  const [embedMethod, setEmbedMethod] = useState<'embed' | 'object' | 'iframe' | 'fallback'>('embed');
   const [hasError, setHasError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const embedRef = useRef<HTMLEmbedElement>(null);
   const objectRef = useRef<HTMLObjectElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  console.log(`📄 PDFEmbed rendering with method: ${embedMethod}, src: ${src}`);
 
   const handleEmbedError = () => {
     console.log('🚫 Embed method failed, trying object method');
     setEmbedMethod('object');
+    setIsLoading(true);
   };
 
   const handleObjectError = () => {
-    console.log('🚫 Object method failed, showing fallback');
+    console.log('🚫 Object method failed, trying iframe method');
+    setEmbedMethod('iframe');
+    setIsLoading(true);
+  };
+
+  const handleIframeError = () => {
+    console.log('🚫 Iframe method failed, showing fallback');
     setEmbedMethod('fallback');
     setHasError(true);
+    setIsLoading(false);
     onError?.('PDF cannot be displayed in browser');
+  };
+
+  const handleLoad = () => {
+    console.log(`✅ PDF loaded successfully with method: ${embedMethod}`);
+    setIsLoading(false);
+    setHasError(false);
   };
 
   const openInNewTab = () => {
     window.open(src, '_blank', 'noopener,noreferrer');
   };
 
-  useEffect(() => {
-    // Reset when src changes
+  const resetAndRetry = () => {
+    console.log('🔄 Resetting and retrying PDF load');
     setEmbedMethod('embed');
     setHasError(false);
+    setIsLoading(true);
+  };
+
+  useEffect(() => {
+    // Reset when src changes
+    console.log(`🔄 PDF source changed to: ${src}`);
+    setEmbedMethod('embed');
+    setHasError(false);
+    setIsLoading(true);
   }, [src]);
 
   if (embedMethod === 'fallback' || hasError) {
@@ -45,6 +72,9 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
           <div className="text-gray-600 hebrew-text">
             לא ניתן להציג את הקובץ בדפדפן
           </div>
+          <div className="text-sm text-gray-500 hebrew-text">
+            הדפדפן חוסם הצגת קובצי PDF מסיבות אבטחה
+          </div>
           <div className="flex gap-2 justify-center">
             <Button onClick={openInNewTab} className="hebrew-text">
               <ExternalLink size={16} className="ml-2" />
@@ -52,7 +82,7 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => setEmbedMethod('embed')}
+              onClick={resetAndRetry}
               className="hebrew-text"
             >
               <RefreshCw size={16} className="ml-2" />
@@ -64,40 +94,86 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
     );
   }
 
-  if (embedMethod === 'object') {
+  if (embedMethod === 'iframe') {
     return (
-      <object
-        ref={objectRef}
-        data={src}
-        type="application/pdf"
-        className={className}
-        title={title}
-        onError={handleObjectError}
-      >
-        <div className="flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 h-full">
-          <div className="text-center space-y-4 p-8">
-            <div className="text-gray-600 hebrew-text">
-              טוען קובץ PDF...
+      <div className={`relative ${className}`}>
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+            <div className="text-center space-y-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <div className="text-gray-600 hebrew-text text-sm">טוען בשיטה חלופית...</div>
             </div>
-            <Button onClick={openInNewTab} className="hebrew-text">
-              <ExternalLink size={16} className="ml-2" />
-              פתח בטאב חדש
-            </Button>
           </div>
-        </div>
-      </object>
+        )}
+        <iframe
+          ref={iframeRef}
+          src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
+          title={title}
+          className="w-full h-full border-0"
+          onLoad={handleLoad}
+          onError={handleIframeError}
+        />
+      </div>
     );
   }
 
+  if (embedMethod === 'object') {
+    return (
+      <div className={`relative ${className}`}>
+        {isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+            <div className="text-center space-y-2">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <div className="text-gray-600 hebrew-text text-sm">טוען PDF...</div>
+            </div>
+          </div>
+        )}
+        <object
+          ref={objectRef}
+          data={src}
+          type="application/pdf"
+          className="w-full h-full"
+          title={title}
+          onLoad={handleLoad}
+          onError={handleObjectError}
+        >
+          <div className="flex items-center justify-center bg-gray-50 h-full">
+            <div className="text-center space-y-4 p-8">
+              <div className="text-gray-600 hebrew-text">
+                טוען קובץ PDF...
+              </div>
+              <Button onClick={openInNewTab} className="hebrew-text">
+                <ExternalLink size={16} className="ml-2" />
+                פתח בטאב חדש
+              </Button>
+            </div>
+          </div>
+        </object>
+      </div>
+    );
+  }
+
+  // Default: embed method
   return (
-    <embed
-      ref={embedRef}
-      src={`${src}#toolbar=1&navpanes=1&scrollbar=1`}
-      type="application/pdf"
-      className={className}
-      title={title}
-      onError={handleEmbedError}
-    />
+    <div className={`relative ${className}`}>
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+          <div className="text-center space-y-2">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+            <div className="text-gray-600 hebrew-text text-sm">טוען PDF...</div>
+          </div>
+        </div>
+      )}
+      <embed
+        ref={embedRef}
+        src={`${src}#toolbar=1&navpanes=1&scrollbar=1&view=FitH`}
+        type="application/pdf"
+        className="w-full h-full"
+        title={title}
+        onLoad={handleLoad}
+        onError={handleEmbedError}
+      />
+    </div>
   );
 };
 

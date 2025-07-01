@@ -2,6 +2,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Button } from './ui/button';
 import { RefreshCw } from 'lucide-react';
+import PDFEmbed from './PDFEmbed';
 
 interface SimplePDFRendererProps {
   pdfUrl: string;
@@ -18,7 +19,6 @@ const SimplePDFRenderer = ({
   onLoadError,
   className = "" 
 }: SimplePDFRendererProps) => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -36,8 +36,7 @@ const SimplePDFRenderer = ({
     onLoadSuccess?.();
   };
 
-  const handleError = () => {
-    const errorMsg = `Failed to load PDF: ${pdfUrl}`;
+  const handleError = (errorMsg: string) => {
     console.error(`❌ ${errorMsg}`);
     setIsLoading(false);
     setError(errorMsg);
@@ -75,15 +74,11 @@ const SimplePDFRenderer = ({
         </div>
       )}
       
-      <iframe
-        ref={iframeRef}
+      <PDFEmbed
         src={pdfUrl}
-        width="100%"
-        height="800px"
-        onLoad={handleLoad}
-        onError={handleError}
-        className="border-0 rounded-lg shadow-lg"
         title="PDF Viewer"
+        className="w-full h-[800px] rounded-lg shadow-lg"
+        onError={handleError}
       />
     </div>
   );
