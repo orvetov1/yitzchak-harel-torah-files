@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/button';
-import { Document, Page } from 'react-pdf';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { useKeyboardNavigation } from '../hooks/useKeyboardNavigation';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -79,35 +78,25 @@ const VirtualPDFViewer = ({ pdfFileId, onClose }: VirtualPDFViewerProps) => {
   });
 
   const renderPDFPage = (pageNumber: number, pageUrl: string) => {
-    console.log(`🔍 Rendering page ${pageNumber} with direct react-pdf`);
+    console.log(`🔍 Rendering page ${pageNumber} directly with image/embed`);
     
     return (
-      <div className="bg-white shadow-lg" style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}>
-        <Document
-          file={pageUrl}
-          onLoadSuccess={() => {
-            console.log(`✅ Page ${pageNumber} loaded successfully`);
+      <div 
+        className="bg-white shadow-lg flex items-center justify-center min-h-[800px]"
+        style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
+      >
+        <img
+          src={pageUrl}
+          alt={`עמוד ${pageNumber}`}
+          className="max-w-full h-auto"
+          onLoad={() => {
+            console.log(`✅ Page ${pageNumber} image loaded successfully`);
           }}
-          onLoadError={(error) => {
-            console.error(`❌ Page ${pageNumber} load error:`, error);
+          onError={(error) => {
+            console.error(`❌ Page ${pageNumber} image load error:`, error);
           }}
-          loading={
-            <div className="flex items-center justify-center h-96 hebrew-text">
-              <div className="text-center space-y-2">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <div>טוען עמוד {pageNumber}...</div>
-              </div>
-            </div>
-          }
-        >
-          <Page
-            pageNumber={1}
-            scale={1.0} // Scale handled by container
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-            className="mx-auto"
-          />
-        </Document>
+          style={{ maxHeight: '90vh' }}
+        />
       </div>
     );
   };
