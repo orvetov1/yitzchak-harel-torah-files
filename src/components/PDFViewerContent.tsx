@@ -1,11 +1,9 @@
 import React from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
-
-// Configure PDF.js worker to use local file
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+import '../utils/pdfWorkerLoader';
 
 interface PDFViewerContentProps {
   fileUrl: string;

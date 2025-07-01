@@ -3,10 +3,7 @@ import { Button } from './ui/button';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import VirtualScrollContainer from './VirtualScrollContainer';
 import PDFViewerControlsBar from './PDFViewerControlsBar';
-import { pdfjs } from 'react-pdf';
-
-// Configure PDF.js worker to use local file
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+import '../utils/pdfWorkerLoader';
 
 interface VirtualPDFViewerProps {
   pdfFileId: string;
