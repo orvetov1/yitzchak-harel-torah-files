@@ -3,7 +3,7 @@ import React from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { Button } from './ui/button';
 
-// Configure PDF.js worker to use local file
+// Configure PDF.js worker to use compatible version
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.js',
   import.meta.url,

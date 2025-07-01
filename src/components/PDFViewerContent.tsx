@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
 
-// Configure PDF.js worker to use local file
+// Configure PDF.js worker to use compatible version
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.js',
   import.meta.url,

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
@@ -6,7 +5,7 @@ import VirtualScrollContainer from './VirtualScrollContainer';
 import PDFViewerControlsBar from './PDFViewerControlsBar';
 import { pdfjs } from 'react-pdf';
 
-// Configure PDF.js worker to use local file
+// Configure PDF.js worker to use compatible version
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.js',
   import.meta.url,
