@@ -17,7 +17,7 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  console.log(`📄 ReliablePDFViewer loading: ${pdfUrl}`);
+  console.log(`📄 ReliablePDFViewer rendering: ${pdfUrl}`);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
     console.log(`✅ PDF loaded successfully with ${numPages} pages`);
@@ -28,7 +28,7 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
 
   const onDocumentLoadError = useCallback((error: Error) => {
     console.error('❌ PDF load error:', error);
-    setError('שגיאה בטעינת PDF');
+    setError(`שגיאה בטעינת PDF: ${error.message}`);
     setLoading(false);
   }, []);
 
@@ -49,12 +49,17 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
   };
 
   const handleDownload = () => {
-    const link = document.createElement('a');
-    link.href = pdfUrl;
-    link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    try {
+      const link = document.createElement('a');
+      link.href = pdfUrl;
+      link.download = fileName.endsWith('.pdf') ? fileName : `${fileName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error('Download failed:', err);
+      window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const openInNewTab = () => {
@@ -102,7 +107,7 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
       </div>
 
       {/* Navigation and zoom controls */}
-      {!loading && (
+      {!loading && !error && numPages > 0 && (
         <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
           <Button variant="outline" onClick={goToPrevPage} disabled={pageNumber <= 1}>
             <ChevronRight size={16} />
@@ -162,18 +167,28 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             className="max-w-full"
+            loading={null}
             options={{
               cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
               cMapPacked: true,
+              standardFontDataUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/',
             }}
           >
-            {!loading && (
+            {!loading && !error && numPages > 0 && (
               <Page
                 pageNumber={pageNumber}
                 scale={scale}
                 className="shadow-lg"
                 renderTextLayer={false}
                 renderAnnotationLayer={false}
+                loading={
+                  <div className="flex items-center justify-center h-96">
+                    <div className="text-center space-y-2">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                      <div className="hebrew-text text-sm">טוען עמוד...</div>
+                    </div>
+                  </div>
+                }
               />
             )}
           </Document>
