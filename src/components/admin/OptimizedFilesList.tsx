@@ -11,7 +11,7 @@ import OptimizationStatus from './OptimizationStatus';
 import PDFViewerModal from '../PDFViewerModal';
 
 const OptimizedFilesList = () => {
-  const { items, isLoading, error, refetch } = usePDFFiles('all');
+  const { items, isLoading, error, reload } = usePDFFiles();
   const [selectedPDF, setSelectedPDF] = useState<any>(null);
   const [optimizingFiles, setOptimizingFiles] = useState<Set<string>>(new Set());
 
@@ -32,7 +32,7 @@ const OptimizedFilesList = () => {
       newSet.delete(pdfFileId);
       return newSet;
     });
-    refetch(); // Refresh the list to show updated status
+    reload(); // Use reload instead of refetch
   };
 
   if (isLoading) {
@@ -90,7 +90,7 @@ const OptimizedFilesList = () => {
 
       {selectedPDF && (
         <PDFViewerModal
-          pdfUrl={selectedPDF.file_path}
+          pdfUrl={selectedPDF.filePath}
           fileName={selectedPDF.title}
           isOpen={!!selectedPDF}
           onClose={() => setSelectedPDF(null)}
@@ -116,7 +116,7 @@ const FileOptimizationItem = ({
   onRequestOptimization,
   onOptimizationComplete 
 }: FileOptimizationItemProps) => {
-  const optimization = usePDFOptimization(item.file_path, item.id);
+  const optimization = usePDFOptimization(item.filePath, item.id);
   
   // Poll for optimization status if currently optimizing
   useOptimizationPolling({
@@ -151,9 +151,9 @@ const FileOptimizationItem = ({
           />
         </div>
         <div className="flex items-center gap-4 text-sm text-muted-foreground hebrew-text">
-          <span>קטגוריה: {item.category_name || 'לא מוגדר'}</span>
-          {item.file_size && (
-            <span>גודל: {Math.round(item.file_size / 1024)}KB</span>
+          <span>קטגוריה: {item.category || 'לא מוגדר'}</span>
+          {optimization.originalSize && (
+            <span>גודל: {Math.round(optimization.originalSize / 1024)}KB</span>
           )}
           {optimization.originalSize && optimization.optimizedSize && (
             <span className="text-green-600">
@@ -169,7 +169,7 @@ const FileOptimizationItem = ({
         <Button 
           variant="outline" 
           size="sm" 
-          onClick={() => window.open(item.file_path, '_blank')}
+          onClick={() => window.open(item.filePath, '_blank')}
         >
           <Download size={16} />
         </Button>
