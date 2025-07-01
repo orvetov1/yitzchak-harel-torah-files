@@ -179,6 +179,47 @@ export type Database = {
           },
         ]
       }
+      pdf_table_of_contents: {
+        Row: {
+          chapter_title: string
+          created_at: string
+          id: string
+          level: number
+          order_index: number
+          page_number: number
+          pdf_file_id: string
+          updated_at: string
+        }
+        Insert: {
+          chapter_title: string
+          created_at?: string
+          id?: string
+          level?: number
+          order_index: number
+          page_number: number
+          pdf_file_id: string
+          updated_at?: string
+        }
+        Update: {
+          chapter_title?: string
+          created_at?: string
+          id?: string
+          level?: number
+          order_index?: number
+          page_number?: number
+          pdf_file_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pdf_table_of_contents_pdf_file_id_fkey"
+            columns: ["pdf_file_id"]
+            isOneToOne: false
+            referencedRelation: "pdf_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
