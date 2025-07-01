@@ -23,13 +23,14 @@ const sanitizeFileName = (fileName: string): string => {
   // Replace Hebrew characters and special characters with safe alternatives
   const sanitized = nameWithoutExt
     .replace(/[א-ת]/g, '') // Remove Hebrew characters
+    .replace(/[\u0590-\u05FF]/g, '') // Remove all Hebrew Unicode range characters
     .replace(/[^\w\-_.]/g, '-') // Replace non-alphanumeric with dash
     .replace(/[-_]{2,}/g, '-') // Replace multiple dashes/underscores with single dash
     .replace(/^[-_]+|[-_]+$/g, '') // Remove leading/trailing dashes
     .toLowerCase();
   
   // If name becomes empty after sanitization, use timestamp
-  const finalName = sanitized || 'file';
+  const finalName = sanitized || `file-${Date.now()}`;
   
   return `${finalName}${extension}`;
 };
