@@ -3,8 +3,6 @@ import React, { useState, useCallback } from 'react';
 import { Document, Page } from 'react-pdf';
 import { Button } from '../ui/button';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, ExternalLink } from 'lucide-react';
-import 'react-pdf/dist/Page/AnnotationLayer.css';
-import 'react-pdf/dist/Page/TextLayer.css';
 
 interface ReliablePDFViewerProps {
   pdfUrl: string;
@@ -164,14 +162,18 @@ const ReliablePDFViewer = ({ pdfUrl, fileName, className = "" }: ReliablePDFView
             onLoadSuccess={onDocumentLoadSuccess}
             onLoadError={onDocumentLoadError}
             className="max-w-full"
+            options={{
+              cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/',
+              cMapPacked: true,
+            }}
           >
             {!loading && (
               <Page
                 pageNumber={pageNumber}
                 scale={scale}
                 className="shadow-lg"
-                renderTextLayer={true}
-                renderAnnotationLayer={true}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
               />
             )}
           </Document>
