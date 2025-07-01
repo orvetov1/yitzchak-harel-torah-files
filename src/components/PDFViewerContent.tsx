@@ -5,11 +5,8 @@ import { Button } from './ui/button';
 import { Download, RefreshCw, ExternalLink } from 'lucide-react';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
 
-// Configure PDF.js worker to use compatible version
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.js',
-  import.meta.url,
-).toString();
+// Configure PDF.js worker with correct version matching
+pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 interface PDFViewerContentProps {
   fileUrl: string;
