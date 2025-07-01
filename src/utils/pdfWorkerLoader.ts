@@ -1,12 +1,12 @@
 
 import { pdfjs } from 'react-pdf';
 
-// Configure PDF.js worker with matching version to the installed pdfjs-dist
+// Configure PDF.js worker for React-PDF v9+ using simpler approach
 export const configurePDFWorker = () => {
   try {
-    // Use the version that matches our installed pdfjs-dist@4.4.168
-    pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js';
-    console.log('📄 PDF.js Worker configured successfully with version 4.4.168');
+    // Use CDN version that matches the installed pdfjs version
+    pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
+    console.log('📄 PDF.js Worker configured with CDN version:', pdfjs.version);
     return true;
   } catch (error) {
     console.error('❌ PDF.js worker configuration failed:', error);
@@ -16,6 +16,3 @@ export const configurePDFWorker = () => {
 
 // Initialize worker configuration immediately
 configurePDFWorker();
-
-// Export pdfjs for use in components
-export { pdfjs };
