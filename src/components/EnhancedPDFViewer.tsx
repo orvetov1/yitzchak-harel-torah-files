@@ -8,13 +8,11 @@ import { usePDFPages } from '../hooks/usePDFPages';
 import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
 import VirtualPDFViewer from './VirtualPDFViewer';
-import workerSrc from 'pdfjs-dist/build/pdf.worker.min.js?url'
 
-pdfjs.GlobalWorkerOptions.workerSrc = workerSrc
 
 import '../utils/pdfWorkerLoader';
 
-
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
