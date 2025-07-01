@@ -48,7 +48,7 @@ const VirtualPDFPageRenderer = ({
   return (
     <div 
       key={pageNumber}
-      className={`mb-6 ${isCurrentPage ? 'ring-2 ring-blue-500' : ''}`}
+      className="mb-6"
     >
       <div className="bg-white p-2 rounded-lg shadow-lg">
         <div className="text-center hebrew-text text-sm text-gray-600 mb-2">

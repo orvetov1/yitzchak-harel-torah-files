@@ -37,12 +37,13 @@ export const usePDFLazyLoader = (
     error: null
   });
 
-  const { cacheRef, getPageUrl, isPageLoaded, cleanup: cleanupCache } = usePDFCacheManager();
+  const { cacheRef, getPageUrl, isPageLoaded, setPageUrl, cleanup: cleanupCache } = usePDFCacheManager();
   const { loadPageData, loadingPages, error: pageLoaderError, cleanup: cleanupLoader } = usePDFPageLoader(pdfFileId);
   const { preloadPages } = usePDFPreloader(preloadDistance, state.totalPages, state.loadedPages);
 
-  // Sync cache with state
+  // Sync cache with state - this is crucial for the UI to update
   useEffect(() => {
+    console.log(`🔄 Syncing cache state: cache size=${cacheRef.current.size}`);
     setState(prev => ({
       ...prev,
       loadedPages: new Map(cacheRef.current),
@@ -59,20 +60,17 @@ export const usePDFLazyLoader = (
       return;
     }
 
-    // Only update if page actually changed
-    if (pageNumber !== state.currentPage) {
-      console.log(`📄 Changing page from ${state.currentPage} to ${pageNumber}`);
-      setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
+    // Update current page immediately
+    setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
 
-      // Load current page
-      await loadPageData(pageNumber, cacheRef, maxCachedPages);
+    // Load current page
+    await loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl);
 
-      // Preload surrounding pages
-      await preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages));
+    // Preload surrounding pages
+    await preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl));
 
-      setState(prev => ({ ...prev, isLoading: false }));
-    }
-  }, [state.currentPage, state.totalPages, loadPageData, preloadPages, maxCachedPages]);
+    setState(prev => ({ ...prev, isLoading: false }));
+  }, [loadPageData, preloadPages, maxCachedPages, setPageUrl, state.currentPage, state.totalPages]);
 
   // Initialize total pages count
   useEffect(() => {
@@ -100,7 +98,7 @@ export const usePDFLazyLoader = (
         // Load first page immediately
         if (totalPages > 0) {
           console.log(`🎯 Loading first page automatically`);
-          loadPageData(1, cacheRef, maxCachedPages);
+          loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
         }
 
       } catch (error) {
@@ -113,7 +111,7 @@ export const usePDFLazyLoader = (
     };
 
     initializePagesCount();
-  }, [pdfFileId, loadPageData, maxCachedPages]);
+  }, [pdfFileId, loadPageData, maxCachedPages, setPageUrl]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -126,8 +124,8 @@ export const usePDFLazyLoader = (
   return {
     ...state,
     goToPage,
-    loadPageData: (pageNumber: number) => loadPageData(pageNumber, cacheRef, maxCachedPages),
-    preloadPages: (pageNumber: number) => preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages)),
+    loadPageData: (pageNumber: number) => loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl),
+    preloadPages: (pageNumber: number) => preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl)),
     getPageUrl,
     isPageLoaded,
     isPageLoading: (pageNumber: number) => loadingPages.has(pageNumber)

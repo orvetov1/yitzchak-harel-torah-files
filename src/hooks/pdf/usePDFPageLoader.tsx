@@ -18,14 +18,16 @@ export const usePDFPageLoader = (pdfFileId: string) => {
   const loadPageData = useCallback(async (
     pageNumber: number,
     cacheRef: React.MutableRefObject<Map<number, string>>,
-    maxCachedPages: number
+    maxCachedPages: number,
+    setPageUrl: (pageNumber: number, url: string) => void
   ): Promise<string | null> => {
     console.log(`🔄 loadPageData called for page ${pageNumber}`);
     
     // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
-      console.log(`📋 Page ${pageNumber} already cached`);
-      return cacheRef.current.get(pageNumber)!;
+      const url = cacheRef.current.get(pageNumber)!;
+      console.log(`📋 Page ${pageNumber} already cached: ${url}`);
+      return url;
     }
 
     // Check if already loading
@@ -64,7 +66,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         }
 
         blobUrl = URL.createObjectURL(fileData);
-        console.log(`✅ Split page ${pageNumber} loaded successfully`);
+        console.log(`✅ Split page ${pageNumber} loaded successfully: ${blobUrl}`);
         
       } else {
         console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
@@ -86,10 +88,12 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           .getPublicUrl(pdfFile.file_path);
 
         blobUrl = data.publicUrl;
+        console.log(`✅ Main PDF URL for page ${pageNumber}: ${blobUrl}`);
       }
 
-      // Cache the result
+      // Cache the result using both cacheRef and setPageUrl
       cacheRef.current.set(pageNumber, blobUrl);
+      setPageUrl(pageNumber, blobUrl);
 
       // Clean up old cache if needed
       if (cacheRef.current.size > maxCachedPages) {
@@ -107,7 +111,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         error: null
       }));
 
-      console.log(`✅ Page ${pageNumber} successfully loaded and cached`);
+      console.log(`✅ Page ${pageNumber} successfully loaded and cached: ${blobUrl}`);
       return blobUrl;
 
     } catch (error) {
