@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -11,6 +10,7 @@ interface LinearizationState {
   compressionRatio?: number;
   originalSize?: number;
   linearizedSize?: number;
+  optimizedSize?: number;
   isLinearized?: boolean;
 }
 
@@ -49,6 +49,7 @@ export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
         compressionRatio: data.compression_ratio || undefined,
         originalSize: data.original_size || undefined,
         linearizedSize: data.optimized_size || undefined,
+        optimizedSize: data.optimized_size || undefined,
         isLinearized: data.processing_status === 'linearized',
         error: null
       }));

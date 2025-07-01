@@ -5,7 +5,9 @@ import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, Zap, RefreshCw
 import { Progress } from './ui/progress';
 import { usePDFLinearization } from '../hooks/usePDFLinearization';
 import { usePDFPages } from '../hooks/usePDFPages';
+import { usePDFLazyLoader } from '../hooks/usePDFLazyLoader';
 import { Badge } from './ui/badge';
+import VirtualPDFViewer from './VirtualPDFViewer';
 
 interface EnhancedPDFViewerProps {
   fileUrl: string;
@@ -16,10 +18,10 @@ interface EnhancedPDFViewerProps {
 }
 
 const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: EnhancedPDFViewerProps) => {
-  const [viewMode, setViewMode] = useState<'hybrid' | 'pages' | 'full'>('hybrid');
+  const [viewMode, setViewMode] = useState<'hybrid' | 'pages' | 'full' | 'virtual'>('virtual');
   const [currentPage, setCurrentPage] = useState(1);
   const [scale, setScale] = useState(1.0);
-  const [loadingStrategy, setLoadingStrategy] = useState<'auto' | 'range' | 'pages'>('auto');
+  const [loadingStrategy, setLoadingStrategy] = useState<'auto' | 'range' | 'pages' | 'virtual'>('virtual');
   
   const containerRef = useRef<HTMLDivElement>(null);
   
@@ -29,11 +31,19 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   // Use pages hook for split PDF functionality
   const { pages, fileInfo, isLoading: pagesLoading } = usePDFPages(pdfFileId || '');
 
-  // Smart strategy selection
+  // Smart strategy selection with new virtual option as default
   useEffect(() => {
     if (!isOpen) return;
 
     const selectOptimalStrategy = async () => {
+      // Prefer virtual scrolling with lazy loading as the default
+      if (pdfFileId) {
+        setViewMode('virtual');
+        setLoadingStrategy('virtual');
+        console.log('📊 Using virtual scrolling with lazy loading');
+        return;
+      }
+
       // If we have linearized version, prefer hybrid approach
       if (linearization.hasLinearizedVersion) {
         setViewMode('hybrid');
@@ -57,7 +67,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
     };
 
     selectOptimalStrategy();
-  }, [isOpen, linearization.hasLinearizedVersion, pages.length]);
+  }, [isOpen, linearization.hasLinearizedVersion, pages.length, pdfFileId]);
 
   const handleLinearizeRequest = useCallback(async () => {
     if (linearization.isLinearizing) return;
@@ -70,6 +80,14 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   const zoomOut = () => setScale(prev => Math.max(0.5, prev - 0.2));
 
   const renderStrategyBadge = () => {
+    if (viewMode === 'virtual') {
+      return (
+        <Badge variant="default" className="bg-purple-100 text-purple-800 border-purple-200">
+          🚀 טעינה וירטואלית חכמה
+        </Badge>
+      );
+    }
+
     if (linearization.hasLinearizedVersion) {
       return (
         <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
@@ -102,6 +120,11 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   };
 
   const renderContent = () => {
+    // Virtual scrolling mode - new default
+    if (viewMode === 'virtual' && pdfFileId) {
+      return <VirtualPDFViewer pdfFileId={pdfFileId} onClose={onClose} />;
+    }
+
     if (viewMode === 'pages' && pages.length > 0) {
       // Render individual page
       const currentPageData = pages.find(p => p.pageNumber === currentPage);
@@ -141,6 +164,39 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
   if (!isOpen) return null;
 
   const totalPages = fileInfo?.numPagesTotal || pages.length || 1;
+
+  // If using virtual mode, render minimal wrapper
+  if (viewMode === 'virtual' && pdfFileId) {
+    return (
+      <div 
+        ref={containerRef}
+        className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm"
+      >
+        <div className="flex flex-col h-full">
+          {/* Minimal header for virtual mode */}
+          <div className="bg-white border-b border-border p-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <h2 className="hebrew-title text-lg font-semibold">{fileName}</h2>
+              {renderStrategyBadge()}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => window.open(fileUrl, '_blank')}>
+                <Download size={16} />
+              </Button>
+              <Button variant="outline" onClick={onClose}>
+                <X size={16} />
+              </Button>
+            </div>
+          </div>
+
+          {/* Virtual content */}
+          <div className="flex-1">
+            {renderContent()}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
@@ -200,59 +256,62 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
         )}
 
         {/* Controls */}
-        <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
-          <Button variant="outline" onClick={goToPrevPage} disabled={currentPage <= 1}>
-            <ChevronRight size={16} />
-          </Button>
-          
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min="1"
-              max={totalPages}
-              value={currentPage}
-              onChange={(e) => {
-                const page = parseInt(e.target.value);
-                if (page >= 1 && page <= totalPages) {
-                  setCurrentPage(page);
-                }
-              }}
-              className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
-            />
-            <span className="hebrew-text text-sm text-muted-foreground">
-              / {totalPages}
+        {viewMode !== 'virtual' && (
+          <div className="bg-white border-b border-border p-3 flex items-center justify-center gap-4">
+            <Button variant="outline" onClick={goToPrevPage} disabled={currentPage <= 1}>
+              <ChevronRight size={16} />
+            </Button>
+            
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min="1"
+                max={totalPages}
+                value={currentPage}
+                onChange={(e) => {
+                  const page = parseInt(e.target.value);
+                  if (page >= 1 && page <= totalPages) {
+                    setCurrentPage(page);
+                  }
+                }}
+                className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
+              />
+              <span className="hebrew-text text-sm text-muted-foreground">
+                / {totalPages}
+              </span>
+            </div>
+
+            <Button variant="outline" onClick={goToNextPage} disabled={currentPage >= totalPages}>
+              <ChevronLeft size={16} />
+            </Button>
+
+            <div className="w-px h-6 bg-border mx-2" />
+
+            <Button variant="outline" onClick={zoomOut} disabled={scale <= 0.5}>
+              <ZoomOut size={16} />
+            </Button>
+            <span className="hebrew-text text-sm text-muted-foreground min-w-12 text-center">
+              {Math.round(scale * 100)}%
             </span>
+            <Button variant="outline" onClick={zoomIn} disabled={scale >= 3.0}>
+              <ZoomIn size={16} />
+            </Button>
+
+            {/* Strategy selector */}
+            <div className="flex items-center gap-2 ml-4">
+              <select
+                value={viewMode}
+                onChange={(e) => setViewMode(e.target.value as any)}
+                className="text-xs border border-border rounded px-2 py-1 hebrew-text"
+              >
+                <option value="virtual">וירטואלי (מומלץ)</option>
+                <option value="hybrid">היברידי</option>
+                <option value="pages">עמודים נפרדים</option>
+                <option value="full">קובץ מלא</option>
+              </select>
+            </div>
           </div>
-
-          <Button variant="outline" onClick={goToNextPage} disabled={currentPage >= totalPages}>
-            <ChevronLeft size={16} />
-          </Button>
-
-          <div className="w-px h-6 bg-border mx-2" />
-
-          <Button variant="outline" onClick={zoomOut} disabled={scale <= 0.5}>
-            <ZoomOut size={16} />
-          </Button>
-          <span className="hebrew-text text-sm text-muted-foreground min-w-12 text-center">
-            {Math.round(scale * 100)}%
-          </span>
-          <Button variant="outline" onClick={zoomIn} disabled={scale >= 3.0}>
-            <ZoomIn size={16} />
-          </Button>
-
-          {/* Strategy selector */}
-          <div className="flex items-center gap-2 ml-4">
-            <select
-              value={viewMode}
-              onChange={(e) => setViewMode(e.target.value as any)}
-              className="text-xs border border-border rounded px-2 py-1 hebrew-text"
-            >
-              <option value="hybrid">היברידי</option>
-              <option value="pages">עמודים נפרדים</option>
-              <option value="full">קובץ מלא</option>
-            </select>
-          </div>
-        </div>
+        )}
 
         {/* PDF Content */}
         <div className="flex-1 overflow-auto bg-gray-100 flex items-center justify-center p-4">
@@ -264,6 +323,7 @@ const EnhancedPDFViewer = ({ fileUrl, fileName, isOpen, onClose, pdfFileId }: En
           <span className="hebrew-text text-xs text-muted-foreground">
             השתמש בחיצים לדפדוף, +/- לזום, ESC לסגירה
             {linearization.hasLinearizedVersion && ' • גרסה לינארית פעילה'}
+            {viewMode === 'virtual' && ' • טעינה וירטואלית פעילה'}
             {viewMode === 'pages' && ' • טעינה לפי עמודים'}
           </span>
         </div>
