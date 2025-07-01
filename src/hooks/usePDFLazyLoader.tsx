@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -39,20 +40,26 @@ export const usePDFLazyLoader = (
 
   const cacheRef = useRef<Map<number, string>>(new Map());
   const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const isInitializedRef = useRef(false);
 
   // Load page data (either from split pages or range request)
   const loadPageData = useCallback(async (pageNumber: number): Promise<string | null> => {
+    console.log(`🔄 loadPageData called for page ${pageNumber}`);
+    
     // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
+      console.log(`📋 Page ${pageNumber} already cached`);
       return cacheRef.current.get(pageNumber)!;
     }
 
     // Check if already loading
     if (state.loadingPages.has(pageNumber)) {
+      console.log(`⏳ Page ${pageNumber} already loading`);
       return null;
     }
 
     try {
+      console.log(`🚀 Starting to load page ${pageNumber}`);
       setState(prev => ({
         ...prev,
         loadingPages: new Set([...prev.loadingPages, pageNumber])
@@ -124,6 +131,7 @@ export const usePDFLazyLoader = (
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
       }));
 
+      console.log(`✅ Page ${pageNumber} successfully loaded and cached`);
       return blobUrl;
 
     } catch (error) {
@@ -135,10 +143,11 @@ export const usePDFLazyLoader = (
       }));
       return null;
     }
-  }, [pdfFileId, maxCachedPages, state.loadingPages]);
+  }, [pdfFileId, maxCachedPages]);
 
   // Preload surrounding pages
   const preloadPages = useCallback(async (centerPage: number) => {
+    console.log(`🔄 preloadPages called for center page ${centerPage}`);
     const pagesToPreload = [];
     
     for (let i = -preloadDistance; i <= preloadDistance; i++) {
@@ -149,6 +158,8 @@ export const usePDFLazyLoader = (
         pagesToPreload.push(pageNum);
       }
     }
+
+    console.log(`📋 Pages to preload: ${pagesToPreload.join(', ')}`);
 
     // Load pages in parallel
     const preloadPromises = pagesToPreload.map(async (pageNum) => {
@@ -164,22 +175,34 @@ export const usePDFLazyLoader = (
 
   // Navigate to page with smart preloading
   const goToPage = useCallback(async (pageNumber: number) => {
-    if (pageNumber < 1 || pageNumber > state.totalPages) return;
+    console.log(`🎯 goToPage called with pageNumber: ${pageNumber}, current: ${state.currentPage}, total: ${state.totalPages}`);
+    
+    if (pageNumber < 1 || (state.totalPages > 0 && pageNumber > state.totalPages)) {
+      console.log(`❌ Invalid page number: ${pageNumber}`);
+      return;
+    }
 
-    setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
+    // Only update if page actually changed
+    if (pageNumber !== state.currentPage) {
+      console.log(`📄 Changing page from ${state.currentPage} to ${pageNumber}`);
+      setState(prev => ({ ...prev, currentPage: pageNumber, isLoading: true }));
 
-    // Load current page
-    await loadPageData(pageNumber);
+      // Load current page
+      await loadPageData(pageNumber);
 
-    // Preload surrounding pages
-    await preloadPages(pageNumber);
+      // Preload surrounding pages
+      await preloadPages(pageNumber);
 
-    setState(prev => ({ ...prev, isLoading: false }));
-  }, [state.totalPages, loadPageData, preloadPages]);
+      setState(prev => ({ ...prev, isLoading: false }));
+    }
+  }, [state.currentPage, state.totalPages, loadPageData, preloadPages]);
 
-  // Initialize total pages count
+  // Initialize total pages count - FIX: Remove circular dependency
   useEffect(() => {
+    if (!pdfFileId || isInitializedRef.current) return;
+    
     const initializePagesCount = async () => {
+      console.log(`🚀 Initializing pages count for pdfFileId: ${pdfFileId}`);
       try {
         const { data, error } = await supabase
           .from('pdf_files')
@@ -189,14 +212,20 @@ export const usePDFLazyLoader = (
 
         if (error) throw error;
 
+        const totalPages = data.num_pages_total || 1;
+        console.log(`📊 Total pages found: ${totalPages}`);
+
         setState(prev => ({
           ...prev,
-          totalPages: data.num_pages_total || 1
+          totalPages: totalPages
         }));
 
+        isInitializedRef.current = true;
+
         // Load first page immediately
-        if (data.num_pages_total && data.num_pages_total > 0) {
-          goToPage(1);
+        if (totalPages > 0) {
+          console.log(`🎯 Loading first page automatically`);
+          loadPageData(1);
         }
 
       } catch (error) {
@@ -208,16 +237,19 @@ export const usePDFLazyLoader = (
       }
     };
 
-    if (pdfFileId) {
-      initializePagesCount();
-    }
-  }, [pdfFileId, goToPage]);
+    initializePagesCount();
+  }, [pdfFileId, loadPageData]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log('🧹 Cleaning up PDF lazy loader');
       // Revoke all blob URLs
-      cacheRef.current.forEach(url => URL.revokeObjectURL(url));
+      cacheRef.current.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
       cacheRef.current.clear();
       
       // Abort all ongoing requests
