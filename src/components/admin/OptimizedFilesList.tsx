@@ -16,7 +16,13 @@ const OptimizedFilesList = () => {
   const [optimizingFiles, setOptimizingFiles] = useState<Set<string>>(new Set());
 
   const handleViewPDF = (item: any) => {
+    console.log(`📖 Opening PDF viewer for: ${item.title}`);
     setSelectedPDF(item);
+  };
+
+  const handleClosePDF = () => {
+    console.log(`❌ Closing PDF viewer`);
+    setSelectedPDF(null);
   };
 
   const handleRequestOptimization = async (pdfFileId: string) => {
@@ -88,15 +94,12 @@ const OptimizedFilesList = () => {
         </CardContent>
       </Card>
 
+      {/* הסרנו את העטיפה הכפולה - רק VirtualPDFViewer */}
       {selectedPDF && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm">
-          <div className="flex flex-col h-full">
-            <VirtualPDFViewer
-              pdfFileId={selectedPDF.id}
-              onClose={() => setSelectedPDF(null)}
-            />
-          </div>
-        </div>
+        <VirtualPDFViewer
+          pdfFileId={selectedPDF.id}
+          onClose={handleClosePDF}
+        />
       )}
     </>
   );

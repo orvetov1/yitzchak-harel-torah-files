@@ -40,6 +40,14 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     useVirtualScrolling: true
   });
 
+  // Cleanup function
+  useEffect(() => {
+    return () => {
+      console.log(`🧹 VirtualPDFContainer cleanup for pdfFileId: ${pdfFileId}`);
+      // The usePDFLazyLoader hook handles its own cleanup
+    };
+  }, [pdfFileId]);
+
   // Update visible pages when current page changes
   useEffect(() => {
     console.log(`📄 Current page changed to: ${currentPage}, total: ${totalPages}`);
