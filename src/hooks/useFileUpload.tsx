@@ -68,7 +68,8 @@ export const useFileUpload = () => {
       // Create a unique storage path for the file, using the sanitized name
       const sanitizedFileName = sanitizeFileName(file.name);
       // Construct a unique path for the storage bucket. This is the RELATIVE path.
-      const storageRelativePath = `uploads/${Date.now()}-${sanitizedFileName}`; 
+      // מומלץ ליצור תיקייה ייעודית לקבצים שהועלו
+      const storageRelativePath = `uploaded_files/${Date.now()}-${sanitizedFileName}`; 
       
       console.log('📤 Starting file upload...');
       console.log('Original file name:', file.name);
@@ -146,7 +147,7 @@ export const useFileUpload = () => {
           body: {
             pdf_file_id: dbInsertData.id,
             file_path: storageRelativePath, // Pass relative path to backend function
-            file_name: sanitizedFileName // Pass original sanitized name
+            file_name: sanitizedFileName // Pass original sanitized name (used for logging or internal naming)
           }
         });
 
