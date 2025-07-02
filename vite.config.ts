@@ -34,8 +34,13 @@ export default defineConfig(({ mode }) => ({
           'pdfjs': ['pdfjs-dist', 'react-pdf']
         }
       }
-    }
+    },
+    // Ensure public assets are copied correctly
+    assetsDir: 'assets',
+    copyPublicDir: true
   },
+  // Ensure public directory files are served correctly
+  publicDir: 'public',
   // Define globals to prevent build issues
   define: {
     global: 'globalThis',

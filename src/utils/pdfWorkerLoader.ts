@@ -1,17 +1,17 @@
 
-// Simplified PDF worker loader using centralized configuration
+// Simplified PDF worker loader using centralized configuration with static paths
 import PDFWorkerManager, { initializePDFWorker } from './pdfWorkerConfig';
 
 let initializationPromise: Promise<boolean> | null = null;
 
-// Initialize worker with the new ESM-based configuration
+// Initialize worker with the new static path configuration
 const initWorker = async (): Promise<boolean> => {
   if (initializationPromise) {
     console.log('🔄 PDF Worker initialization already in progress...');
     return initializationPromise;
   }
 
-  console.log('🚀 Starting enhanced PDF worker initialization...');
+  console.log('🚀 Starting enhanced PDF worker initialization with static paths...');
   
   initializationPromise = initializePDFWorker(2); // Try up to 2 retries
   
@@ -22,10 +22,11 @@ const initWorker = async (): Promise<boolean> => {
       console.log('✅ Enhanced PDF worker initialized successfully');
       const manager = PDFWorkerManager.getInstance();
       console.log('📊 Worker Status:', manager.getWorkerStatus());
+      console.log('🔍 Worker Diagnostics:', manager.getDiagnostics());
     } else {
       console.error('🚨 Enhanced PDF worker initialization failed - using fallback mode');
       const manager = PDFWorkerManager.getInstance();
-      console.log('🔍 Diagnostics:', manager.getDiagnostics());
+      console.log('🔍 Failure Diagnostics:', manager.getDiagnostics());
     }
     
     return success;
@@ -55,9 +56,8 @@ export const getPDFWorkerStatus = () => {
 export const resetPDFWorker = async (): Promise<boolean> => {
   console.log('🔄 Resetting Enhanced PDF Worker...');
   const manager = PDFWorkerManager.getInstance();
-  manager.reset();
   initializationPromise = null;
-  return await initWorker();
+  return await manager.resetAndRetry();
 };
 
 export const waitForPDFWorker = async (timeoutMs = 15000): Promise<boolean> => {
