@@ -83,7 +83,7 @@ const getRecommendations = (diagnostics: any): string[] => {
   const recommendations = [];
   
   if (diagnostics.fileSize && diagnostics.fileSize < 100000) {
-    recommendations.push('החלף את קובץ pdf.worker.min.js בקובץ מלא מ-node_modules/pdfjs-dist/build/');
+    recommendations.push('החלף את קובץ pdf.worker.mjs בקובץ מלא מ-node_modules/pdfjs-dist/build/');
   }
   
   if (diagnostics.errors.some((e: string) => e.includes('timeout'))) {
@@ -91,7 +91,7 @@ const getRecommendations = (diagnostics: any): string[] => {
   }
   
   if (diagnostics.errors.some((e: string) => e.includes('not accessible'))) {
-    recommendations.push('ודא שהקובץ pdf.worker.min.js נמצא בתיקיית public/');
+    recommendations.push('ודא שהקובץ pdf.worker.mjs נמצא בתיקיית public/');
   }
   
   if (diagnostics.attempts > 3) {
