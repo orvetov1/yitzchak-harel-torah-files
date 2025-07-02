@@ -1,45 +1,42 @@
 
-// Enhanced PDF worker loader with better error handling
+// Simplified PDF worker loader using centralized configuration
 import PDFWorkerManager, { initializePDFWorker } from './pdfWorkerConfig';
 
 let initializationPromise: Promise<boolean> | null = null;
 
-// Initialize worker with enhanced error handling and retry logic
+// Initialize worker with the new ESM-based configuration
 const initWorker = async (): Promise<boolean> => {
   if (initializationPromise) {
     console.log('🔄 PDF Worker initialization already in progress...');
     return initializationPromise;
   }
 
-  console.log('🚀 Starting PDF worker initialization...');
+  console.log('🚀 Starting enhanced PDF worker initialization...');
   
-  initializationPromise = initializePDFWorker(3); // Try up to 3 times
+  initializationPromise = initializePDFWorker(2); // Try up to 2 retries
   
   try {
     const success = await initializationPromise;
     
     if (success) {
-      console.log('✅ PDF worker initialized successfully');
-      
-      // Log worker status for debugging
+      console.log('✅ Enhanced PDF worker initialized successfully');
       const manager = PDFWorkerManager.getInstance();
       console.log('📊 Worker Status:', manager.getWorkerStatus());
     } else {
-      console.error('🚨 Failed to initialize PDF worker - PDF functionality will be limited');
-      console.log('🔍 Diagnostics:', PDFWorkerManager.getInstance().getDiagnostics());
-      
-      // Still return the promise to allow fallback behavior
+      console.error('🚨 Enhanced PDF worker initialization failed - using fallback mode');
+      const manager = PDFWorkerManager.getInstance();
+      console.log('🔍 Diagnostics:', manager.getDiagnostics());
     }
     
     return success;
   } catch (error) {
-    console.error('💥 PDF Worker initialization threw an error:', error);
-    initializationPromise = null; // Reset so we can try again
+    console.error('💥 Enhanced PDF Worker initialization error:', error);
+    initializationPromise = null;
     return false;
   }
 };
 
-// Export utilities for diagnostics and management
+// Enhanced utility functions
 export const getPDFWorkerDiagnostics = () => {
   const manager = PDFWorkerManager.getInstance();
   return manager.getDiagnostics();
@@ -56,38 +53,37 @@ export const getPDFWorkerStatus = () => {
 };
 
 export const resetPDFWorker = async (): Promise<boolean> => {
-  console.log('🔄 Resetting PDF Worker...');
+  console.log('🔄 Resetting Enhanced PDF Worker...');
   const manager = PDFWorkerManager.getInstance();
   manager.reset();
   initializationPromise = null;
   return await initWorker();
 };
 
-export const waitForPDFWorker = async (timeoutMs = 10000): Promise<boolean> => {
-  console.log('⏳ Waiting for PDF Worker to be ready...');
+export const waitForPDFWorker = async (timeoutMs = 15000): Promise<boolean> => {
+  console.log('⏳ Waiting for Enhanced PDF Worker to be ready...');
   
   const startTime = Date.now();
   while (Date.now() - startTime < timeoutMs) {
     if (isPDFWorkerReady()) {
-      console.log('✅ PDF Worker is ready');
+      console.log('✅ Enhanced PDF Worker is ready');
       return true;
     }
     
-    // If no initialization is in progress, start it
     if (!initializationPromise) {
       initWorker();
     }
     
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
   
-  console.warn('⏰ Timeout waiting for PDF Worker');
+  console.warn('⏰ Timeout waiting for Enhanced PDF Worker');
   return false;
 };
 
 // Initialize immediately on module load
 initWorker().catch(error => {
-  console.error('Failed to initialize PDF worker on module load:', error);
+  console.error('Failed to initialize enhanced PDF worker on module load:', error);
 });
 
 // Legacy exports for compatibility

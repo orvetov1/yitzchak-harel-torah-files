@@ -1,14 +1,11 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 import { Button } from './ui/button';
 import { ChevronLeft, ChevronRight, Download, X, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
 import { Progress } from './ui/progress';
 import { usePDFRangeLoader } from '../hooks/usePDFRangeLoader';
 import { usePDFComplexity } from '../hooks/usePDFComplexity';
-
-// Configure PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+import { waitForPDFWorker, isPDFWorkerReady, getPDFWorkerStatus } from '../utils/pdfWorkerLoader';
 
 interface OptimizedPDFViewerProps {
   fileUrl: string;
@@ -28,18 +25,45 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
   const [pageLoading, setPageLoading] = useState<boolean>(false);
   const [pdfData, setPdfData] = useState<ArrayBuffer | null>(null);
   const [useRangeLoading, setUseRangeLoading] = useState<boolean>(false);
+  const [workerReady, setWorkerReady] = useState<boolean>(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const { analyzeComplexity, getOptimizedSettings } = usePDFComplexity();
   const { state: rangeState, checkRangeSupport, loadInitialChunk, loadRange, cancelLoading: cancelRangeLoading } = usePDFRangeLoader(fileUrl);
 
-  // Initialize PDF loading strategy
+  // Wait for PDF worker to be ready
   useEffect(() => {
     if (!isOpen) return;
 
+    const initializeWorker = async () => {
+      setLoadingPhase('מכין מנוע PDF...');
+      setLoadingProgress(5);
+      
+      try {
+        const ready = await waitForPDFWorker(10000);
+        setWorkerReady(ready);
+        
+        if (ready) {
+          console.log('✅ PDF Worker ready, status:', getPDFWorkerStatus());
+        } else {
+          console.warn('⚠️ PDF Worker not ready, using fallback mode');
+        }
+      } catch (error) {
+        console.error('❌ Error waiting for PDF Worker:', error);
+        setWorkerReady(false);
+      }
+    };
+
+    initializeWorker();
+  }, [isOpen]);
+
+  // Initialize PDF loading strategy after worker is ready
+  useEffect(() => {
+    if (!isOpen || !workerReady) return;
+
     const initializeLoading = async () => {
       setLoading(true);
-      setLoadingProgress(0);
+      setLoadingProgress(10);
       setLoadingPhase('בודק תמיכה ב-Range Requests...');
       setError(null);
 
@@ -51,13 +75,13 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
           console.log('✅ Range requests supported, using progressive loading');
           setUseRangeLoading(true);
           setLoadingPhase('טוען חלק ראשון של הקובץ...');
-          setLoadingProgress(10);
+          setLoadingProgress(20);
           
           // Load initial chunk
           const initialChunk = await loadInitialChunk();
           if (initialChunk) {
             setPdfData(initialChunk);
-            setLoadingProgress(30);
+            setLoadingProgress(40);
             setLoadingPhase('מעבד את החלק הראשון...');
           } else {
             throw new Error('Failed to load initial chunk');
@@ -66,7 +90,7 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
           console.log('⚠️ Range requests not supported, falling back to full download');
           setUseRangeLoading(false);
           setLoadingPhase('מוריד קובץ מלא...');
-          setLoadingProgress(10);
+          setLoadingProgress(20);
           
           // Fallback to full file download
           const response = await fetch(fileUrl);
@@ -88,8 +112,8 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
             receivedLength += value.length;
 
             if (totalSize > 0) {
-              const progress = Math.min((receivedLength / totalSize) * 80, 80);
-              setLoadingProgress(10 + progress);
+              const progress = Math.min((receivedLength / totalSize) * 70, 70);
+              setLoadingProgress(20 + progress);
               setLoadingPhase(`מוריד: ${Math.round(receivedLength / 1024)}KB מתוך ${Math.round(totalSize / 1024)}KB`);
             }
           }
@@ -117,10 +141,10 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
     return () => {
       cancelRangeLoading();
     };
-  }, [isOpen, fileUrl, checkRangeSupport, loadInitialChunk, cancelRangeLoading]);
+  }, [isOpen, workerReady, fileUrl, checkRangeSupport, loadInitialChunk, cancelRangeLoading]);
 
   const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    console.log(`✅ PDF loaded successfully with ${numPages} pages`);
+    console.log(`✅ Enhanced PDF loaded successfully with ${numPages} pages`);
     setNumPages(numPages);
     setLoading(false);
     setLoadingProgress(100);
@@ -129,7 +153,7 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
   }, []);
 
   const onDocumentLoadError = useCallback((error: Error) => {
-    console.error('❌ PDF document load error:', error);
+    console.error('❌ Enhanced PDF document load error:', error);
     setError('שגיאה בטעינת הקובץ - אנא נסה שוב');
     setLoading(false);
     setLoadingProgress(0);
@@ -168,7 +192,7 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
   const retryLoading = () => {
     setPdfData(null);
     setError(null);
-    // Re-trigger loading by changing a dependency
+    setWorkerReady(false);
     setPageNumber(1);
   };
 
@@ -196,6 +220,11 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
                 {useRangeLoading && (
                   <span className="hebrew-text text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
                     טעינה מתקדמת
+                  </span>
+                )}
+                {isPDFWorkerReady() && (
+                  <span className="hebrew-text text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                    PDF Worker פעיל
                   </span>
                 )}
               </div>
@@ -229,11 +258,16 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
                 </span>
               </div>
               <Progress value={loadingProgress} className="h-2" />
-              {useRangeLoading && (
-                <div className="hebrew-text text-xs text-blue-600">
-                  ✨ משתמש בטעינה מתקדמת - עמודים נטענים לפי הצורך
+              <div className="flex items-center justify-between text-xs">
+                {useRangeLoading && (
+                  <div className="hebrew-text text-blue-600">
+                    ✨ טעינה מתקדמת פעילה
+                  </div>
+                )}
+                <div className="hebrew-text text-muted-foreground">
+                  Worker: {getPDFWorkerStatus()}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
@@ -289,6 +323,9 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
                 <div className="hebrew-text text-sm text-muted-foreground">
                   {useRangeLoading ? 'טעינה מתקדמת מופעלת' : 'טעינה רגילה'}
                 </div>
+                <div className="hebrew-text text-xs text-muted-foreground">
+                  {getPDFWorkerStatus()}
+                </div>
               </div>
             </div>
           ) : error ? (
@@ -297,6 +334,9 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
                 <div className="text-red-600 text-lg font-medium">{error}</div>
                 <div className="text-sm text-muted-foreground">
                   אנא נסה שוב או הורד את הקובץ למחשב
+                </div>
+                <div className="text-xs text-muted-foreground bg-gray-50 p-2 rounded">
+                  מצב Worker: {getPDFWorkerStatus()}
                 </div>
               </div>
               
@@ -348,6 +388,7 @@ const OptimizedPDFViewer = ({ fileUrl, fileName, isOpen, onClose }: OptimizedPDF
             השתמש בחיצים לדפדוף, +/- לזום, ESC לסגירה
             {pageLoading && ' • טוען עמוד...'}
             {useRangeLoading && ' • טעינה מתקדמת פעילה'}
+            {isPDFWorkerReady() && ' • PDF Worker פעיל'}
           </span>
         </div>
       </div>

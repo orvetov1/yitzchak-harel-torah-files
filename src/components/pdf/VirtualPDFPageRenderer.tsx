@@ -6,7 +6,7 @@ import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
-import { getPDFWorkerStatus } from '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus, isPDFWorkerReady } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -33,9 +33,9 @@ const VirtualPDFPageRenderer = ({
     return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
   };
 
-  // Get worker status for better fallback decisions
+  // Get enhanced worker status
   const workerManager = PDFWorkerManager.getInstance();
-  const isWorkerAvailable = workerManager.isInitialized();
+  const isWorkerAvailable = isPDFWorkerReady();
   const isFallbackMode = workerManager.isFallbackMode();
   const workerStatus = getPDFWorkerStatus();
 
@@ -52,20 +52,20 @@ const VirtualPDFPageRenderer = ({
       return 'image';
     }
     
-    // For PDF files, check worker availability
+    // For PDF files, check enhanced worker availability
     if (!isWorkerAvailable || isFallbackMode) {
-      console.log(`📄 Page ${pageNumber}: PDF Worker not available (status: ${workerStatus}), using Image Renderer as fallback`);
+      console.log(`📄 Page ${pageNumber}: Enhanced PDF Worker not available (${workerStatus}), using Image Renderer as fallback`);
       return 'image'; // Try image renderer as fallback for PDFs too
     }
     
-    console.log(`📄 Page ${pageNumber}: PDF Worker available (status: ${workerStatus}), using PDF Document Renderer`);
+    console.log(`📄 Page ${pageNumber}: Enhanced PDF Worker available (${workerStatus}), using PDF Document Renderer`);
     return 'pdf';
   };
 
   const renderMode = getRenderMode(pageUrl);
 
   // Enhanced logging for debugging
-  console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
+  console.log(`🔍 Enhanced VirtualPDFPageRenderer - Page ${pageNumber}:`, {
     pageUrl: pageUrl ? `Available (${pageUrl.substring(0, 50)}...)` : 'null',
     renderMode,
     isCurrentPage,
@@ -74,7 +74,7 @@ const VirtualPDFPageRenderer = ({
     workerDiagnostics: {
       initialized: isWorkerAvailable,
       fallbackMode: isFallbackMode,
-      errors: workerManager.getDiagnostics().errors.slice(-2) // Last 2 errors
+      errors: workerManager.getDiagnostics().errors.slice(-2)
     }
   });
 
@@ -123,7 +123,7 @@ const VirtualPDFPageRenderer = ({
                       <div className="text-muted-foreground text-lg">עמוד {pageNumber} לא זמין</div>
                       <div className="text-xs text-muted-foreground bg-yellow-50 p-3 rounded border">
                         <div className="font-medium mb-1">מידע טכני:</div>
-                        <div>מצב Worker: {workerStatus}</div>
+                        <div>מצב Enhanced Worker: {workerStatus}</div>
                         {workerManager.getDiagnostics().errors.length > 0 && (
                           <div className="mt-2 text-red-600">
                             שגיאה אחרונה: {workerManager.getDiagnostics().errors.slice(-1)[0]}

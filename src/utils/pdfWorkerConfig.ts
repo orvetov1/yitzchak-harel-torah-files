@@ -1,7 +1,7 @@
 
 import { pdfjs } from 'react-pdf';
 
-// Enhanced PDF worker configuration with robust fallbacks
+// Enhanced PDF worker configuration with ESM support for production
 export class PDFWorkerManager {
   private static instance: PDFWorkerManager;
   private workerInitialized = false;
@@ -44,84 +44,96 @@ export class PDFWorkerManager {
 
     console.log(`🚀 Initializing PDF Worker (attempt ${this.diagnostics.attempts})`);
 
-    // Check cached worker source first
-    const cachedWorkerSource = localStorage.getItem('pdf-worker-source');
-    let workerSources = [];
-
-    if (cachedWorkerSource) {
-      console.log(`📋 Found cached worker source: ${cachedWorkerSource}`);
-      workerSources.push(cachedWorkerSource);
-    }
-
-    // Add all potential worker sources
-    workerSources.push(
-      `${window.location.origin}/pdf.worker.min.js`, // Local file - highest priority
-      '/pdf.worker.min.js', // Relative path fallback
-      'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js', // Specific version
-      'https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.js', // Alternative CDN
-      'https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js' // Generic fallback
-    );
-
-    // Remove duplicates
-    workerSources = [...new Set(workerSources)];
+    // Try different worker sources in order of preference
+    const workerSources = [
+      // ESM worker entry (recommended for Vite)
+      () => this.configureESMWorker(),
+      // Local static file
+      () => this.configureStaticWorker(`${window.location.origin}/pdf.worker.min.js`),
+      // CDN fallbacks with version matching
+      () => this.configureStaticWorker('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'),
+      () => this.configureStaticWorker('https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.js')
+    ];
 
     for (let i = 0; i < workerSources.length; i++) {
-      const workerSrc = workerSources[i];
-      console.log(`🔧 Trying PDF worker source ${i + 1}/${workerSources.length}: ${workerSrc}`);
+      console.log(`🔧 Trying PDF worker configuration ${i + 1}/${workerSources.length}`);
       
       try {
-        // Test worker source availability
-        const isAvailable = await this.testWorkerSource(workerSrc);
-        if (!isAvailable) {
-          throw new Error('Worker source not available');
-        }
-
-        // Configure PDF.js worker
-        pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
-        console.log(`⚙️ Configured PDF.js with worker: ${workerSrc}`);
-        
-        // Test the worker with a simple document
-        const testSuccess = await this.testWorker();
-        if (testSuccess) {
+        const success = await workerSources[i]();
+        if (success) {
           this.workerInitialized = true;
-          this.diagnostics.workerSource = workerSrc;
           this.diagnostics.initialized = true;
           
           const elapsedTime = Date.now() - startTime;
-          console.log(`✅ PDF Worker initialized successfully in ${elapsedTime}ms using: ${workerSrc}`);
-          
-          // Cache successful worker source
-          localStorage.setItem('pdf-worker-source', workerSrc);
+          console.log(`✅ PDF Worker initialized successfully in ${elapsedTime}ms`);
           return true;
         }
       } catch (error) {
-        const errorMsg = `Failed with ${workerSrc}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        const errorMsg = `Configuration ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
         console.warn(`⚠️ ${errorMsg}`);
         this.diagnostics.errors.push(errorMsg);
       }
     }
 
-    // If all workers failed, enable fallback mode
-    console.error('❌ All PDF worker sources failed - enabling fallback mode');
+    // If all configurations failed, enable fallback mode
+    console.error('❌ All PDF worker configurations failed - enabling fallback mode');
     this.diagnostics.fallbackMode = true;
-    
-    // Try to use a basic fallback configuration
+    return false;
+  }
+
+  private async configureESMWorker(): Promise<boolean> {
     try {
-      pdfjs.GlobalWorkerOptions.workerSrc = null;
-      console.log('🔄 Attempting to use inline worker as last resort');
-      return false; // Still consider this a failure, but don't crash
-    } catch (fallbackError) {
-      console.error('❌ Even fallback configuration failed:', fallbackError);
-      return false;
+      console.log('🔧 Configuring ESM worker entry...');
+      
+      // Use the ESM worker entry which is recommended for modern bundlers
+      const workerEntry = await import('pdfjs-dist/build/pdf.worker.min.js?worker&url');
+      
+      if (workerEntry.default) {
+        pdfjs.GlobalWorkerOptions.workerSrc = workerEntry.default;
+        this.diagnostics.workerSource = 'ESM Worker Entry';
+        console.log('✅ ESM worker configured successfully');
+        
+        return await this.testWorker();
+      } else {
+        throw new Error('ESM worker entry not available');
+      }
+    } catch (error) {
+      console.warn('❌ ESM worker configuration failed:', error);
+      throw error;
+    }
+  }
+
+  private async configureStaticWorker(workerSrc: string): Promise<boolean> {
+    try {
+      console.log(`🔧 Configuring static worker: ${workerSrc}`);
+      
+      // Test if worker source is available
+      const isAvailable = await this.testWorkerSource(workerSrc);
+      if (!isAvailable) {
+        throw new Error('Worker source not available');
+      }
+
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      this.diagnostics.workerSource = workerSrc;
+      
+      const success = await this.testWorker();
+      if (success) {
+        console.log(`✅ Static worker configured: ${workerSrc}`);
+        return true;
+      } else {
+        throw new Error('Worker test failed');
+      }
+    } catch (error) {
+      console.warn(`❌ Static worker configuration failed for ${workerSrc}:`, error);
+      throw error;
     }
   }
 
   private async testWorkerSource(workerSrc: string): Promise<boolean> {
     try {
       if (workerSrc.startsWith('http')) {
-        // Test external sources
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
         
         const response = await fetch(workerSrc, { 
           method: 'HEAD',
@@ -130,16 +142,9 @@ export class PDFWorkerManager {
         });
         
         clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        console.log(`✅ Worker source available: ${workerSrc}`);
-        return true;
+        return response.ok;
       } else {
-        // For local/relative paths, assume they're available
-        console.log(`📁 Using local worker file: ${workerSrc}`);
+        // For local paths, assume available
         return true;
       }
     } catch (error) {
@@ -148,19 +153,19 @@ export class PDFWorkerManager {
     }
   }
 
-  private async testWorker(timeoutMs = 3000): Promise<boolean> {
+  private async testWorker(timeoutMs = 5000): Promise<boolean> {
     try {
       console.log('🧪 Testing PDF Worker functionality...');
       
-      // Create a minimal test PDF data
+      // Create minimal test PDF data
       const testPdfData = new Uint8Array([
-        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, // %PDF-1.4
-        0x0a, 0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a // Basic PDF structure with %%EOF
+        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34,
+        0x0a, 0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a
       ]);
 
       const testPromise = pdfjs.getDocument({ 
         data: testPdfData,
-        verbosity: 0 // Reduce console noise during test
+        verbosity: 0
       }).promise;
       
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -195,9 +200,9 @@ export class PDFWorkerManager {
 
   getWorkerStatus(): string {
     if (this.workerInitialized) {
-      return `✅ Initialized with ${this.diagnostics.workerSource}`;
+      return `✅ Initialized (${this.diagnostics.workerSource})`;
     } else if (this.diagnostics.fallbackMode) {
-      return '⚠️ Fallback mode (limited functionality)';
+      return '⚠️ Fallback mode - limited functionality';
     } else {
       return '❌ Not initialized';
     }
@@ -213,12 +218,11 @@ export class PDFWorkerManager {
       fallbackMode: false,
       attempts: 0
     };
-    localStorage.removeItem('pdf-worker-source');
     console.log('🔄 PDF Worker Manager reset');
   }
 }
 
-// Initialize worker on module load with retry mechanism
+// Initialize worker with enhanced error handling
 export const initializePDFWorker = async (retries = 2): Promise<boolean> => {
   const manager = PDFWorkerManager.getInstance();
   

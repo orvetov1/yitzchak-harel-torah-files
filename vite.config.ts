@@ -20,20 +20,27 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  // Simplified PDF.js configuration for React-PDF v9+
+  // Enhanced PDF.js configuration for production
   optimizeDeps: {
     include: [
-      'pdfjs-dist'
+      'pdfjs-dist',
+      'pdfjs-dist/build/pdf.worker.min.js'
     ]
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          'pdfjs': ['pdfjs-dist']
+          'pdfjs': ['pdfjs-dist'],
+          'pdfjs-worker': ['pdfjs-dist/build/pdf.worker.min.js']
         }
       }
     }
+  },
+  // Enhanced worker support
+  worker: {
+    format: 'es',
+    plugins: () => [react()]
   },
   // Define globals to prevent build issues
   define: {

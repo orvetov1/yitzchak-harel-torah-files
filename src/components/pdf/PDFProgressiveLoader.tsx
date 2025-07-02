@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { RefreshCw, Image, FileText, AlertTriangle, Settings } from 'lucide-react';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
-import { getPDFWorkerStatus, resetPDFWorker } from '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus, resetPDFWorker, isPDFWorkerReady } from '../../utils/pdfWorkerLoader';
 
 interface PDFProgressiveLoaderProps {
   pageNumber: number;
@@ -36,14 +36,14 @@ const PDFProgressiveLoader = ({
   const handleResetWorker = async () => {
     setIsResettingWorker(true);
     try {
-      console.log('🔄 Resetting PDF Worker from user action...');
+      console.log('🔄 Resetting Enhanced PDF Worker from user action...');
       await resetPDFWorker();
       setLoadAttempts(0);
       setLastError(null);
       onRetry();
     } catch (error) {
-      console.error('Failed to reset PDF Worker:', error);
-      setLastError('Failed to reset PDF Worker');
+      console.error('Failed to reset Enhanced PDF Worker:', error);
+      setLastError('Failed to reset Enhanced PDF Worker');
     } finally {
       setIsResettingWorker(false);
     }
@@ -51,7 +51,7 @@ const PDFProgressiveLoader = ({
 
   const handleError = (error: string) => {
     setLastError(error);
-    console.error(`📄 Progressive loader error for page ${pageNumber}:`, error);
+    console.error(`📄 Enhanced progressive loader error for page ${pageNumber}:`, error);
   };
 
   // Reset attempts when page changes
@@ -61,10 +61,11 @@ const PDFProgressiveLoader = ({
     setShowDiagnostics(false);
   }, [pageNumber, pageUrl]);
 
-  // Get worker diagnostics
+  // Get enhanced worker diagnostics
   const workerManager = PDFWorkerManager.getInstance();
   const diagnostics = workerManager.getDiagnostics();
   const workerStatus = getPDFWorkerStatus();
+  const isWorkerReady = isPDFWorkerReady();
 
   // Show loading state
   if (isLoading) {
@@ -75,10 +76,13 @@ const PDFProgressiveLoader = ({
           <div className="space-y-1">
             <div>טוען עמוד {pageNumber}...</div>
             <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
-              {renderMode === 'pdf' && <><FileText size={12} /> PDF Worker</>}
+              {renderMode === 'pdf' && <><FileText size={12} /> Enhanced PDF Worker</>}
               {renderMode === 'image' && <><Image size={12} /> תמונה</>}
               {renderMode === 'fallback' && <><AlertTriangle size={12} /> מצב חלופי</>}
               {loadAttempts > 0 && <span>(נסיון {loadAttempts + 1})</span>}
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Worker: {workerStatus}
             </div>
           </div>
         </div>
@@ -113,7 +117,7 @@ const PDFProgressiveLoader = ({
                 {loadAttempts >= 5 ? 'מקסימום נסיונות' : 'נסה שוב'}
               </Button>
               
-              {loadAttempts >= 2 && !workerManager.isInitialized() && (
+              {loadAttempts >= 2 && !isWorkerReady && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -122,7 +126,7 @@ const PDFProgressiveLoader = ({
                   className="hebrew-text"
                 >
                   <Settings size={16} className="ml-2" />
-                  {isResettingWorker ? 'מאתחל...' : 'אתחל Worker'}
+                  {isResettingWorker ? 'מאתחל...' : 'אתחל Enhanced Worker'}
                 </Button>
               )}
             </div>
@@ -140,7 +144,7 @@ const PDFProgressiveLoader = ({
                 
                 {showDiagnostics && (
                   <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded max-w-sm text-right">
-                    <div className="font-medium mb-2">אבחון PDF Worker:</div>
+                    <div className="font-medium mb-2">אבחון Enhanced PDF Worker:</div>
                     <div>• מצב: {workerStatus}</div>
                     <div>• מאותחל: {diagnostics.initialized ? 'כן' : 'לא'}</div>
                     <div>• מצב חלופי: {diagnostics.fallbackMode ? 'כן' : 'לא'}</div>
