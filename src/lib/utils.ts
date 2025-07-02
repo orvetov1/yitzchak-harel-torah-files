@@ -1,8 +1,8 @@
 
 import { type ClassValue } from "clsx"
 import clsx from "clsx"
-import * as tailwindMerge from "tailwind-merge"
+import tailwindMerge from "tailwind-merge"
 
 export function cn(...inputs: ClassValue[]) {
-  return tailwindMerge.twMerge(clsx(inputs))
+  return tailwindMerge(clsx(...inputs))
 }
