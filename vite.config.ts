@@ -37,12 +37,16 @@ export default defineConfig(({ mode }) => ({
     },
     // Ensure public assets are copied correctly
     assetsDir: 'assets',
-    copyPublicDir: true
+    copyPublicDir: true,
+    // Ensure large files like PDF worker are not corrupted
+    chunkSizeWarningLimit: 2000, // Increase limit for PDF.js worker
   },
   // Ensure public directory files are served correctly
   publicDir: 'public',
   // Define globals to prevent build issues
   define: {
     global: 'globalThis',
-  }
+  },
+  // Ensure PDF worker files are served with correct MIME type
+  assetsInclude: ['**/*.worker.js', '**/*.worker.min.js']
 }));

@@ -12,6 +12,8 @@ export class PDFWorkerManager {
     timestamp: number;
     attempts: number;
     lastError?: string;
+    fileSize?: number;
+    fileContent?: string;
   } = {
     workerSource: '',
     initialized: false,
@@ -48,39 +50,54 @@ export class PDFWorkerManager {
     try {
       console.log(`🔧 Using local PDF worker: ${localWorkerUrl}`);
       
-      // First verify the worker file exists and is accessible
+      // Enhanced file verification
       const workerResponse = await fetch(localWorkerUrl, { method: 'HEAD' });
       if (!workerResponse.ok) {
         throw new Error(`Worker file not accessible: ${workerResponse.status} ${workerResponse.statusText}`);
       }
       
-      // Get the first part of worker content to verify it's valid
+      // Check file size - a real PDF.js worker should be at least 1MB
+      const contentLength = workerResponse.headers.get('Content-Length');
+      const fileSize = contentLength ? parseInt(contentLength) : 0;
+      this.diagnostics.fileSize = fileSize;
+      
+      console.log(`📏 Worker file size: ${fileSize} bytes (${Math.round(fileSize / 1024)}KB)`);
+      
+      // Real PDF.js worker should be much larger than a few KB
+      if (fileSize < 100000) { // Less than 100KB is suspicious
+        throw new Error(`Worker file appears to be corrupted or incomplete (only ${Math.round(fileSize / 1024)}KB, expected at least 1MB)`);
+      }
+      
+      // Get file content to verify it's a valid worker
       const workerContentResponse = await fetch(localWorkerUrl, {
-        headers: { 'Range': 'bytes=0-1023' } // Get first 1KB to check
+        headers: { 'Range': 'bytes=0-2047' } // Get first 2KB
       });
       const workerContent = await workerContentResponse.text();
+      this.diagnostics.fileContent = workerContent.substring(0, 200) + '...';
       
-      if (!workerContent || workerContent.trim().length < 50) {
+      if (!workerContent || workerContent.trim().length < 100) {
         throw new Error('Worker file appears to be empty or too small');
       }
       
-      // Look for PDF.js indicators in the content
-      const hasPDFJSIndicators = workerContent.includes('PDF.js') || 
-                                 workerContent.includes('pdfjs') || 
-                                 workerContent.includes('worker') ||
-                                 workerContent.includes('function');
+      // Check for PDF.js worker indicators
+      const hasWorkerIndicators = workerContent.includes('PDF.js') || 
+                                 workerContent.includes('pdfjs') ||
+                                 workerContent.includes('GlobalWorkerOptions') ||
+                                 workerContent.includes('function') ||
+                                 workerContent.includes('var ') ||
+                                 workerContent.includes('!function');
       
-      if (!hasPDFJSIndicators) {
-        console.warn('⚠️ Worker file may not contain expected PDF.js code');
+      if (!hasWorkerIndicators) {
+        throw new Error('Worker file does not contain expected PDF.js worker code');
       }
       
-      console.log(`✅ Worker file verified (first 1KB checked)`);
+      console.log(`✅ Worker file verified (${Math.round(fileSize / 1024)}KB, contains valid JS code)`);
       
       // Set the worker source
       pdfjs.GlobalWorkerOptions.workerSrc = localWorkerUrl;
       this.diagnostics.workerSource = localWorkerUrl;
       
-      // Test worker functionality with a simpler approach
+      // Test worker functionality
       const success = await this.testWorker();
       if (success) {
         this.workerInitialized = true;
@@ -105,25 +122,23 @@ export class PDFWorkerManager {
     try {
       console.log('🧪 Testing PDF Worker functionality...');
       
-      // Create a much simpler valid PDF for testing
+      // Create a minimal valid PDF for testing - smaller and simpler
       const testPdfData = new Uint8Array([
-        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, // %PDF-1.4\n
-        0x31, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, // 1 0 obj\n
-        0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, // <</Type/Catalog
-        0x2f, 0x50, 0x61, 0x67, 0x65, 0x73, 0x20, 0x32, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, // /Pages 2 0 R>>\n
-        0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, // endobj\n
-        0x32, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, // 2 0 obj\n
-        0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x50, 0x61, 0x67, 0x65, 0x73, // <</Type/Pages
-        0x2f, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x20, 0x30, 0x3e, 0x3e, 0x0a, // /Count 0>>\n
-        0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, // endobj\n
-        0x78, 0x72, 0x65, 0x66, 0x0a, 0x30, 0x20, 0x33, 0x0a, // xref\n0 3\n
-        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x36, 0x35, 0x35, 0x33, 0x35, 0x20, 0x66, 0x20, 0x0a, // 0000000000 65535 f \n
-        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x39, 0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x6e, 0x20, 0x0a, // 0000000009 00000 n \n
-        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x37, 0x34, 0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x6e, 0x20, 0x0a, // 0000000074 00000 n \n
-        0x74, 0x72, 0x61, 0x69, 0x6c, 0x65, 0x72, 0x0a, // trailer\n
-        0x3c, 0x3c, 0x2f, 0x53, 0x69, 0x7a, 0x65, 0x20, 0x33, 0x2f, 0x52, 0x6f, 0x6f, 0x74, 0x20, 0x31, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, // <</Size 3/Root 1 0 R>>\n
-        0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66, 0x0a, 0x31, 0x31, 0x36, 0x0a, // startxref\n116\n
-        0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a // %%EOF\n
+        37, 80, 68, 70, 45, 49, 46, 52, 10, // %PDF-1.4\n
+        49, 32, 48, 32, 111, 98, 106, 10, // 1 0 obj\n
+        60, 60, 47, 84, 121, 112, 101, 47, 67, 97, 116, 97, 108, 111, 103, 47, 80, 97, 103, 101, 115, 32, 50, 32, 48, 32, 82, 62, 62, 10, // <</Type/Catalog/Pages 2 0 R>>\n
+        101, 110, 100, 111, 98, 106, 10, // endobj\n
+        50, 32, 48, 32, 111, 98, 106, 10, // 2 0 obj\n
+        60, 60, 47, 84, 121, 112, 101, 47, 80, 97, 103, 101, 115, 47, 67, 111, 117, 110, 116, 32, 48, 62, 62, 10, // <</Type/Pages/Count 0>>\n
+        101, 110, 100, 111, 98, 106, 10, // endobj\n
+        120, 114, 101, 102, 10, 48, 32, 51, 10, // xref\n0 3\n
+        48, 48, 48, 48, 48, 48, 48, 48, 48, 48, 32, 54, 53, 53, 51, 53, 32, 102, 32, 10, // 0000000000 65535 f \n
+        48, 48, 48, 48, 48, 48, 48, 48, 48, 57, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, // 0000000009 00000 n \n
+        48, 48, 48, 48, 48, 48, 48, 48, 55, 56, 32, 48, 48, 48, 48, 48, 32, 110, 32, 10, // 0000000078 00000 n \n
+        116, 114, 97, 105, 108, 101, 114, 10, // trailer\n
+        60, 60, 47, 83, 105, 122, 101, 32, 51, 47, 82, 111, 111, 116, 32, 49, 32, 48, 32, 82, 62, 62, 10, // <</Size 3/Root 1 0 R>>\n
+        115, 116, 97, 114, 116, 120, 114, 101, 102, 10, 49, 50, 51, 10, // startxref\n123\n
+        37, 37, 69, 79, 70, 10 // %%EOF\n
       ]);
 
       const testPromise = pdfjs.getDocument({ 
@@ -135,9 +150,9 @@ export class PDFWorkerManager {
         isEvalSupported: false
       }).promise;
       
-      // Shorter timeout for quicker feedback
+      // Very short timeout for quick feedback
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Worker test timeout after 3 seconds')), 3000);
+        setTimeout(() => reject(new Error('Worker test timeout after 2 seconds')), 2000);
       });
 
       const pdfDoc = await Promise.race([testPromise, timeoutPromise]);

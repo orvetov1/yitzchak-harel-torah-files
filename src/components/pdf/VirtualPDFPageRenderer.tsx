@@ -6,7 +6,7 @@ import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import { Button } from '../ui/button';
-import { RefreshCw, AlertTriangle, Download, Settings } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download, Settings, FileX } from 'lucide-react';
 import { getPDFWorkerStatus, isPDFWorkerReady, resetPDFWorker, getPDFWorkerDiagnostics } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
@@ -23,14 +23,14 @@ interface VirtualPDFPageRendererProps {
 
 const VirtualPDFPageRenderer = ({
   pageNumber,
-  pageUrl,
   scale,
   totalPages,
   isCurrentPage,
   isPageLoading,
   isPageLoaded,
   isPageError,
-  onLoadPage
+  onLoadPage,
+  pageUrl
 }: VirtualPDFPageRendererProps) => {
   
   // Check if the URL points to an image file
@@ -122,6 +122,12 @@ const VirtualPDFPageRenderer = ({
   // Show worker not ready state
   if (renderMode === 'worker_not_ready') {
     const diagnostics = getPDFWorkerDiagnostics();
+    const isCorruptedFile = diagnostics.errors.some(error => 
+      error.includes('corrupted') || 
+      error.includes('incomplete') || 
+      error.includes('empty') ||
+      error.includes('too small')
+    );
     
     return (
       <div className="mb-6">
@@ -134,28 +140,64 @@ const VirtualPDFPageRenderer = ({
           />
           
           <div className="flex items-center justify-center h-96 hebrew-text bg-amber-50 border border-amber-200 rounded-lg">
-            <div className="text-center space-y-4 max-w-md p-6">
-              <Settings size={48} className="mx-auto text-amber-600" />
-              <div className="text-amber-700 text-lg font-medium">מנוע ה-PDF לא מוכן</div>
-              <div className="text-sm text-amber-600">
-                יש בעיה באתחול מנוע ה-PDF. זה עלול לקרות בעיקר בטעינה ראשונה.
-              </div>
+            <div className="text-center space-y-4 max-w-lg p-6">
+              {isCorruptedFile ? (
+                <>
+                  <FileX size={48} className="mx-auto text-red-600" />
+                  <div className="text-red-700 text-lg font-medium">קובץ מנוע ה-PDF פגום</div>
+                  <div className="text-sm text-red-600">
+                    קובץ המנוע (pdf.worker.min.js) חסר או פגום. זה מונע מהמערכת לעבד קבצי PDF.
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Settings size={48} className="mx-auto text-amber-600" />
+                  <div className="text-amber-700 text-lg font-medium">מנוע ה-PDF לא מוכן</div>
+                  <div className="text-sm text-amber-600">
+                    יש בעיה באתחול מנוע ה-PDF. זה עלול לקרות בעיקר בטעינה ראשונה.
+                  </div>
+                </>
+              )}
               
-              <div className="bg-amber-100 p-3 rounded border text-xs text-amber-700">
-                <div className="font-medium mb-1">מידע טכני:</div>
+              <div className="bg-gray-100 p-3 rounded border text-xs text-gray-700 font-mono">
+                <div className="font-medium mb-2">מידע טכני:</div>
                 <div>מצב Worker: {workerStatus}</div>
                 <div>שגיאות: {diagnostics.errors.length}</div>
                 <div>ניסיונות: {diagnostics.attempts}</div>
+                {diagnostics.fileSize && (
+                  <div>גודל קובץ: {Math.round(diagnostics.fileSize / 1024)}KB</div>
+                )}
+                {diagnostics.lastError && (
+                  <div className="mt-2 text-red-600 break-words">
+                    שגיאה אחרונה: {diagnostics.lastError}
+                  </div>
+                )}
               </div>
               
               <div className="flex flex-col gap-2">
-                <Button
-                  onClick={handleWorkerRetry}
-                  className="hebrew-text"
-                >
-                  <RefreshCw size={16} className="ml-2" />
-                  אתחל מנוע PDF מחדש
-                </Button>
+                {isCorruptedFile ? (
+                  <>
+                    <div className="bg-red-100 p-3 rounded border text-sm text-red-700">
+                      <div className="font-medium mb-1">פתרון נדרש:</div>
+                      <div>יש להחליף את הקובץ pdf.worker.min.js בתיקיית public/ עם קובץ תקין מספריית pdfjs-dist</div>
+                    </div>
+                    <Button
+                      onClick={handleDirectDownload}
+                      className="hebrew-text"
+                    >
+                      <Download size={16} className="ml-2" />
+                      הורד קובץ למחשב
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={handleWorkerRetry}
+                    className="hebrew-text"
+                  >
+                    <RefreshCw size={16} className="ml-2" />
+                    אתחל מנוע PDF מחדש
+                  </Button>
+                )}
                 
                 <Button
                   onClick={handleDirectDownload}
@@ -163,12 +205,15 @@ const VirtualPDFPageRenderer = ({
                   className="hebrew-text"
                 >
                   <Download size={16} className="ml-2" />
-                  הורד קובץ למחשב
+                  פתח קובץ בטאב חדש
                 </Button>
               </div>
               
-              <div className="text-xs text-amber-600">
-                אם הבעיה נמשכת, נסה לרענן את הדף או להוריד את הקובץ
+              <div className="text-xs text-muted-foreground">
+                {isCorruptedFile 
+                  ? 'בעיה זו דורשת תיקון על ידי מפתח האתר'
+                  : 'אם הבעיה נמשכת, נסה לרענן את הדף או להוריד את הקובץ'
+                }
               </div>
             </div>
           </div>

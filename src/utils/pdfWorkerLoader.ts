@@ -64,7 +64,41 @@ const initWorker = async (forceRetry = false): Promise<boolean> => {
 // Utility functions
 export const getPDFWorkerDiagnostics = () => {
   const manager = PDFWorkerManager.getInstance();
-  return manager.getDiagnostics();
+  const diagnostics = manager.getDiagnostics();
+  
+  // Add enhanced diagnostics
+  return {
+    ...diagnostics,
+    isCorrupted: diagnostics.errors.some(error => 
+      error.includes('corrupted') || 
+      error.includes('incomplete') || 
+      error.includes('empty') ||
+      error.includes('too small')
+    ),
+    recommendations: getRecommendations(diagnostics)
+  };
+};
+
+const getRecommendations = (diagnostics: any): string[] => {
+  const recommendations = [];
+  
+  if (diagnostics.fileSize && diagnostics.fileSize < 100000) {
+    recommendations.push('החלף את קובץ pdf.worker.min.js בקובץ מלא מ-node_modules/pdfjs-dist/build/');
+  }
+  
+  if (diagnostics.errors.some((e: string) => e.includes('timeout'))) {
+    recommendations.push('בדוק את מהירות החיבור לאינטרנט');
+  }
+  
+  if (diagnostics.errors.some((e: string) => e.includes('not accessible'))) {
+    recommendations.push('ודא שהקובץ pdf.worker.min.js נמצא בתיקיית public/');
+  }
+  
+  if (diagnostics.attempts > 3) {
+    recommendations.push('רענן את הדף או נסה להוריד את הקובץ ישירות');
+  }
+  
+  return recommendations;
 };
 
 export const isPDFWorkerReady = () => {
@@ -72,7 +106,14 @@ export const isPDFWorkerReady = () => {
 };
 
 export const getPDFWorkerStatus = () => {
-  if (hasFailed) return '❌ נכשל';
+  const diagnostics = getPDFWorkerDiagnostics();
+  
+  if (hasFailed) {
+    if (diagnostics.isCorrupted) {
+      return '🔧 קובץ פגום';
+    }
+    return '❌ נכשל';
+  }
   if (isInitialized) return '✅ פעיל';
   return '⏳ לא מאותחל';
 };
@@ -101,7 +142,7 @@ export const resetPDFWorker = async (): Promise<boolean> => {
   return await initWorker(true); // Force retry
 };
 
-export const waitForPDFWorker = async (timeoutMs = 10000): Promise<boolean> => {
+export const waitForPDFWorker = async (timeoutMs = 5000): Promise<boolean> => {
   console.log('⏳ Waiting for PDF Worker to be ready...');
   
   const startTime = Date.now();
