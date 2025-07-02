@@ -1,4 +1,4 @@
-
+// supabase/functions/optimize-pdf/index.ts
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { PDFDocument } from 'https://esm.sh/pdf-lib@1.17.1'
@@ -10,12 +10,11 @@ const corsHeaders = {
 
 interface OptimizePDFRequest {
   pdf_file_id: string;
-  file_path: string;
+  file_path: string; // This should be the relative path for storage operations
   file_name: string;
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -45,11 +44,22 @@ serve(async (req) => {
       })
       .eq('id', pdf_file_id);
 
+    // The file_path received by this function should already be the relative path
+    // if coming from the trigger, but we add a safety check just in case.
+    let relativePathForStorage = file_path;
+    if (file_path.includes('/storage/v1/object/public/pdf-files/')) {
+        const match = file_path.match(/\/pdf-files\/(.+)$/);
+        relativePathForStorage = match ? match[1] : file_name; // Fallback to file_name
+    } else if (file_path.startsWith('http')) {
+        relativePathForStorage = file_name;
+    }
+    console.log(`📁 Using relative path for storage (optimization): ${relativePathForStorage}`);
+
     // Download the original PDF
-    console.log('📥 Downloading original PDF from:', file_path);
+    console.log('📥 Downloading original PDF from:', relativePathForStorage);
     const { data: fileData, error: downloadError } = await supabase.storage
       .from('pdf-files')
-      .download(file_path);
+      .download(relativePathForStorage);
 
     if (downloadError || !fileData) {
       throw new Error(`Failed to download PDF: ${downloadError?.message}`);
@@ -59,29 +69,24 @@ serve(async (req) => {
     const originalSize = originalBuffer.byteLength;
     console.log(`📊 Original PDF size: ${Math.round(originalSize / 1024)}KB`);
 
-    // Load PDF with pdf-lib
     const pdfDoc = await PDFDocument.load(originalBuffer);
     const pageCount = pdfDoc.getPageCount();
     console.log(`📄 PDF has ${pageCount} pages`);
 
-    // Create optimized version with linearization hints
-    // This helps with streaming and progressive loading
     const optimizedPdfBytes = await pdfDoc.save({
-      useObjectStreams: false, // Better for streaming
+      useObjectStreams: false,
       addDefaultPage: false,
-      objectsPerTick: 50, // Process in smaller chunks
-      updateFieldAppearances: false // Skip unnecessary updates
+      objectsPerTick: 50,
+      updateFieldAppearances: false
     });
 
     const optimizedSize = optimizedPdfBytes.byteLength;
     const compressionRatio = ((originalSize - optimizedSize) / originalSize * 100);
     console.log(`✅ Optimized PDF size: ${Math.round(optimizedSize / 1024)}KB (${compressionRatio.toFixed(1)}% reduction)`);
 
-    // Generate optimized file path
-    const pathParts = file_path.split('.');
+    const pathParts = relativePathForStorage.split('.');
     const optimizedPath = `${pathParts[0]}-optimized.${pathParts[1]}`;
 
-    // Upload optimized PDF
     const { error: uploadError } = await supabase.storage
       .from('pdf-files')
       .upload(optimizedPath, optimizedPdfBytes, {
@@ -98,12 +103,11 @@ serve(async (req) => {
       .from('pdf-files')
       .getPublicUrl(optimizedPath);
 
-    // Update database with optimization results
-    const { error: dbError } = await supabase
+    await supabase
       .from('pdf_files')
       .update({
         processing_status: 'optimized',
-        optimized_file_path: publicUrl,
+        optimized_file_path: publicUrl, // Store the full public URL
         original_size: originalSize,
         optimized_size: optimizedSize,
         compression_ratio: compressionRatio,
@@ -112,11 +116,6 @@ serve(async (req) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', pdf_file_id);
-
-    if (dbError) {
-      console.error('❌ Database update failed:', dbError);
-      throw dbError;
-    }
 
     console.log('🎉 PDF optimization completed successfully');
 
@@ -138,6 +137,24 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ PDF optimization failed:', error);
+    
+    // Update processing status to failed
+    try {
+      const supabase = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      const requestBody = await req.clone().json();
+      if (requestBody.pdf_file_id) {
+        await supabase
+          .from('pdf_files')
+          .update({ processing_status: 'failed' })
+          .eq('id', requestBody.pdf_file_id);
+      }
+    } catch (updateError) {
+      console.error('❌ Failed to update error status:', updateError);
+    }
     
     return new Response(
       JSON.stringify({
