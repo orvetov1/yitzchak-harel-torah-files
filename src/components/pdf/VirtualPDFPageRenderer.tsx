@@ -5,6 +5,7 @@ import PDFProgressiveLoader from './PDFProgressiveLoader';
 import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
+import PDFWorkerManager from '../../utils/pdfWorkerConfig';
 import '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
@@ -32,7 +33,45 @@ const VirtualPDFPageRenderer = ({
     return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
   };
 
-  const renderMode = pageUrl ? (isImageFile(pageUrl) ? 'image' : 'pdf') : 'fallback';
+  // Get worker status for better fallback decisions
+  const workerManager = PDFWorkerManager.getInstance();
+  const isWorkerAvailable = workerManager.isInitialized();
+  const isFallbackMode = workerManager.isFallbackMode();
+
+  // Enhanced render mode logic
+  const getRenderMode = (url: string | null) => {
+    if (!url) return 'fallback';
+    
+    // Always use image renderer for image files
+    if (isImageFile(url)) {
+      console.log(`🖼️ Page ${pageNumber}: Detected image file, using Image Renderer`);
+      return 'image';
+    }
+    
+    // For PDF files, check worker availability
+    if (!isWorkerAvailable || isFallbackMode) {
+      console.log(`📄 Page ${pageNumber}: PDF Worker not available (initialized: ${isWorkerAvailable}, fallback: ${isFallbackMode}), trying Image Renderer as fallback`);
+      return 'image'; // Try image renderer as fallback for PDFs too
+    }
+    
+    console.log(`📄 Page ${pageNumber}: PDF Worker available, using PDF Document Renderer`);
+    return 'pdf';
+  };
+
+  const renderMode = getRenderMode(pageUrl);
+
+  // Enhanced logging
+  console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
+    pageUrl: pageUrl ? 'available' : 'null',
+    renderMode,
+    isCurrentPage,
+    isPageLoading,
+    workerStatus: {
+      initialized: isWorkerAvailable,
+      fallbackMode: isFallbackMode,
+      diagnostics: workerManager.getDiagnostics()
+    }
+  });
 
   return (
     <div 

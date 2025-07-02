@@ -41,6 +41,18 @@ export const usePDFLazyLoader = (
   const { loadPageData, loadingPages, error: pageLoaderError, cleanup: cleanupLoader } = usePDFPageLoader(pdfFileId);
   const { preloadPages } = usePDFPreloader(preloadDistance, state.totalPages, state.loadedPages);
 
+  console.log(`🚀 usePDFLazyLoader initialized:`, {
+    pdfFileId,
+    options,
+    currentState: {
+      currentPage: state.currentPage,
+      totalPages: state.totalPages,
+      loadedPagesCount: state.loadedPages.size,
+      isLoading: state.isLoading,
+      error: state.error
+    }
+  });
+
   // Sync cache with state - this is crucial for the UI to update
   useEffect(() => {
     const cacheSize = getCacheSize();
@@ -64,10 +76,15 @@ export const usePDFLazyLoader = (
 
   // Navigate to page with smart preloading
   const goToPage = useCallback(async (pageNumber: number) => {
-    console.log(`🎯 goToPage called with pageNumber: ${pageNumber}, current: ${state.currentPage}, total: ${state.totalPages}`);
+    console.log(`🎯 goToPage called:`, {
+      requestedPage: pageNumber,
+      currentPage: state.currentPage,
+      totalPages: state.totalPages,
+      isValidRange: pageNumber >= 1 && (state.totalPages === 0 || pageNumber <= state.totalPages)
+    });
     
     if (pageNumber < 1 || (state.totalPages > 0 && pageNumber > state.totalPages)) {
-      console.log(`❌ Invalid page number: ${pageNumber}`);
+      console.log(`❌ Invalid page number: ${pageNumber} (total: ${state.totalPages})`);
       return;
     }
 
@@ -76,45 +93,55 @@ export const usePDFLazyLoader = (
 
     try {
       // Load current page
+      console.log(`📄 Loading page ${pageNumber}...`);
       const url = await loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl);
       console.log(`✅ Page ${pageNumber} loaded with URL: ${url ? 'available' : 'null'}`);
 
       // Preload surrounding pages
+      console.log(`🔄 Preloading surrounding pages for page ${pageNumber}...`);
       await preloadPages(pageNumber, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl));
 
       setState(prev => ({ ...prev, isLoading: false }));
+      console.log(`✅ Page ${pageNumber} and surrounding pages loaded successfully`);
     } catch (error) {
       console.error(`❌ Failed to load page ${pageNumber}:`, error);
       setState(prev => ({ 
         ...prev, 
         isLoading: false, 
-        error: `Failed to load page ${pageNumber}` 
+        error: `Failed to load page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}` 
       }));
     }
   }, [loadPageData, preloadPages, maxCachedPages, setPageUrl, state.currentPage, state.totalPages]);
 
   // Initialize total pages count
   useEffect(() => {
-    if (!pdfFileId) return;
+    if (!pdfFileId) {
+      console.log(`⚠️ No pdfFileId provided`);
+      return;
+    }
     
     const initializePagesCount = async () => {
       console.log(`🚀 Initializing pages count for pdfFileId: ${pdfFileId}`);
       try {
+        setState(prev => ({ ...prev, isLoading: true, error: null }));
+        
         const { data, error } = await supabase
           .from('pdf_files')
           .select('num_pages_total')
           .eq('id', pdfFileId)
           .single();
 
-        if (error) throw error;
+        if (error) {
+          console.error(`❌ Supabase query error:`, error);
+          throw error;
+        }
 
         const totalPages = data.num_pages_total || 1;
         console.log(`📊 Total pages found: ${totalPages}`);
 
         setState(prev => ({
           ...prev,
-          totalPages: totalPages,
-          isLoading: true
+          totalPages: totalPages
         }));
 
         // Load first page immediately
@@ -122,13 +149,16 @@ export const usePDFLazyLoader = (
           console.log(`🎯 Loading first page automatically`);
           await loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
           setState(prev => ({ ...prev, isLoading: false }));
+          console.log(`✅ First page loaded successfully`);
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }));
         }
 
       } catch (error) {
         console.error('❌ Failed to get pages count:', error);
         setState(prev => ({
           ...prev,
-          error: 'Failed to initialize PDF',
+          error: `Failed to initialize PDF: ${error instanceof Error ? error.message : 'Unknown error'}`,
           isLoading: false
         }));
       }
@@ -140,10 +170,11 @@ export const usePDFLazyLoader = (
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      console.log(`🧹 usePDFLazyLoader cleanup for pdfFileId: ${pdfFileId}`);
       cleanupCache();
       cleanupLoader();
     };
-  }, [cleanupCache, cleanupLoader]);
+  }, [cleanupCache, cleanupLoader, pdfFileId]);
 
   return {
     ...state,

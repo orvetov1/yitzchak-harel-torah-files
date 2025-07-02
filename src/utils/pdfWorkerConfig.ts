@@ -10,11 +10,13 @@ export class PDFWorkerManager {
     initialized: boolean;
     errors: string[];
     timestamp: number;
+    fallbackMode: boolean;
   } = {
     workerSource: '',
     initialized: false,
     errors: [],
-    timestamp: 0
+    timestamp: 0,
+    fallbackMode: false
   };
 
   private constructor() {}
@@ -35,12 +37,11 @@ export class PDFWorkerManager {
     const startTime = Date.now();
     this.diagnostics.errors = [];
     this.diagnostics.timestamp = startTime;
+    this.diagnostics.fallbackMode = false;
 
-    // Try multiple worker sources in order of preference
+    // Try local worker first (best performance, no network dependency)
     const workerSources = [
-      // Local first (best performance, no network dependency)
-      '/pdf.worker.min.js',
-      // CDN fallbacks with version-specific URLs
+      '/pdf.worker.min.js', // Local file - highest priority
       `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
       `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
       `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`,
@@ -55,9 +56,25 @@ export class PDFWorkerManager {
       try {
         // Test if worker source is available
         if (workerSrc.startsWith('http')) {
-          const response = await fetch(workerSrc, { method: 'HEAD' });
-          if (!response.ok || response.status >= 400) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+          
+          try {
+            const response = await fetch(workerSrc, { 
+              method: 'HEAD',
+              signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+            
+            if (!response.ok || response.status >= 400) {
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+              throw new Error('Network timeout');
+            }
+            throw fetchError;
           }
         }
 
@@ -85,7 +102,9 @@ export class PDFWorkerManager {
       }
     }
 
-    console.error('❌ All PDF worker sources failed');
+    // If all workers failed, enable fallback mode
+    console.error('❌ All PDF worker sources failed - enabling fallback mode');
+    this.diagnostics.fallbackMode = true;
     return false;
   }
 
@@ -135,13 +154,18 @@ export class PDFWorkerManager {
     return this.workerInitialized;
   }
 
+  isFallbackMode(): boolean {
+    return this.diagnostics.fallbackMode;
+  }
+
   reset() {
     this.workerInitialized = false;
     this.diagnostics = {
       workerSource: '',
       initialized: false,
       errors: [],
-      timestamp: 0
+      timestamp: 0,
+      fallbackMode: false
     };
     localStorage.removeItem('pdf-worker-source');
   }

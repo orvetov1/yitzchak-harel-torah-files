@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
-import { RefreshCw, Image, FileText } from 'lucide-react';
+import { RefreshCw, Image, FileText, AlertTriangle } from 'lucide-react';
+import PDFWorkerManager from '../../utils/pdfWorkerConfig';
 
 interface PDFProgressiveLoaderProps {
   pageNumber: number;
@@ -22,6 +23,7 @@ const PDFProgressiveLoader = ({
 }: PDFProgressiveLoaderProps) => {
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   const handleRetry = () => {
     setLoadAttempts(prev => prev + 1);
@@ -38,7 +40,12 @@ const PDFProgressiveLoader = ({
   useEffect(() => {
     setLoadAttempts(0);
     setLastError(null);
+    setShowDiagnostics(false);
   }, [pageNumber, pageUrl]);
+
+  // Get worker diagnostics
+  const workerManager = PDFWorkerManager.getInstance();
+  const diagnostics = workerManager.getDiagnostics();
 
   // Show loading state
   if (isLoading) {
@@ -49,9 +56,9 @@ const PDFProgressiveLoader = ({
           <div className="space-y-1">
             <div>טוען עמוד {pageNumber}...</div>
             <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
-              {renderMode === 'pdf' && <><FileText size={12} /> PDF</>}
+              {renderMode === 'pdf' && <><FileText size={12} /> PDF Worker</>}
               {renderMode === 'image' && <><Image size={12} /> תמונה</>}
-              {renderMode === 'fallback' && 'מצב חלופי'}
+              {renderMode === 'fallback' && <><AlertTriangle size={12} /> מצב חלופי</>}
               {loadAttempts > 0 && <span>(נסיון {loadAttempts + 1})</span>}
             </div>
           </div>
@@ -87,8 +94,32 @@ const PDFProgressiveLoader = ({
             </Button>
             
             {loadAttempts >= 2 && (
-              <div className="text-xs text-muted-foreground">
-                מעבר למצב תצוגה חלופי אחרי {3 - loadAttempts} נסיונות נוספים
+              <div className="space-y-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowDiagnostics(!showDiagnostics)}
+                  className="hebrew-text text-xs"
+                >
+                  {showDiagnostics ? 'הסתר' : 'הצג'} מידע טכני
+                </Button>
+                
+                {showDiagnostics && (
+                  <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded max-w-sm">
+                    <div className="font-medium mb-2">מצב PDF Worker:</div>
+                    <div>• מאותחל: {diagnostics.initialized ? 'כן' : 'לא'}</div>
+                    <div>• מצב חלופי: {diagnostics.fallbackMode ? 'כן' : 'לא'}</div>
+                    <div>• מקור: {diagnostics.workerSource || 'לא זמין'}</div>
+                    {diagnostics.errors.length > 0 && (
+                      <div className="mt-2">
+                        <div className="font-medium">שגיאות:</div>
+                        {diagnostics.errors.slice(-2).map((error, i) => (
+                          <div key={i} className="text-red-600">• {error}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
