@@ -61,9 +61,17 @@ export const usePDFLargeLazyViewer = (pdfFileId: string) => {
       if (queryError) throw queryError;
 
       const totalPages = data.num_pages_total || 0;
-      console.log(`📊 File info loaded: ${data.title}, ${totalPages} pages`);
+      console.log(`📊 File info loaded: ${data.title}, ${totalPages} pages, status: ${data.processing_status}`);
 
-      setFileInfo(data);
+      // Map database fields to interface fields
+      const mappedFileInfo: PDFFileInfo = {
+        id: data.id,
+        title: data.title,
+        numPagesTotal: data.num_pages_total,
+        processingStatus: data.processing_status || 'pending'
+      };
+
+      setFileInfo(mappedFileInfo);
       setState(prev => ({ ...prev, totalPages }));
 
     } catch (err) {

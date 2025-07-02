@@ -81,12 +81,19 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     );
   }
 
-  if (fileInfo?.processingStatus !== 'completed') {
+  // Allow viewing even if processing is not completed - check if we have pages
+  const canViewFile = fileInfo && (
+    fileInfo.processingStatus === 'completed' || 
+    totalPages > 0 || 
+    visiblePages.some(p => isPageLoaded(p))
+  );
+
+  if (fileInfo && !canViewFile) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
         <div className="text-lg mb-4">הקובץ עדיין מעובד...</div>
         <div className="text-sm text-muted-foreground mb-4">
-          מצב עיבוד: {fileInfo?.processingStatus || 'לא ידוע'}
+          מצב עיבוד: {fileInfo.processingStatus || 'לא ידוע'}
         </div>
         <div className="space-y-2">
           <Button onClick={reload} className="hebrew-text mr-2">רענן</Button>
