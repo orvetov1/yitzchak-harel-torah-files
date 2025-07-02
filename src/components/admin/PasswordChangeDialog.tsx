@@ -51,30 +51,39 @@ export const PasswordChangeDialog = () => {
         </DialogHeader>
         <form onSubmit={handlePasswordChange} className="space-y-4">
           <div>
-            <Label className="hebrew-text">סיסמה נוכחית</Label>
+            <Label htmlFor="current-password" className="hebrew-text">סיסמה נוכחית</Label>
             <Input
+              id="current-password"
+              name="currentPassword"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
               required
+              autoComplete="current-password"
             />
           </div>
           <div>
-            <Label className="hebrew-text">סיסמה חדשה</Label>
+            <Label htmlFor="new-password" className="hebrew-text">סיסמה חדשה</Label>
             <Input
+              id="new-password"
+              name="newPassword"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               required
+              autoComplete="new-password"
             />
           </div>
           <div>
-            <Label className="hebrew-text">אימות סיסמה חדשה</Label>
+            <Label htmlFor="confirm-password" className="hebrew-text">אימות סיסמה חדשה</Label>
             <Input
+              id="confirm-password"
+              name="confirmPassword"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
+              autoComplete="new-password"
             />
           </div>
           <Button type="submit" disabled={isChangingPassword} className="w-full hebrew-text">

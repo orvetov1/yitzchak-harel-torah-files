@@ -39,12 +39,15 @@ const PDFViewerControls = ({
       
       <div className="flex items-center gap-2">
         <input
+          id="pdf-page-input"
+          name="pdfPageNumber"
           type="number"
           min="1"
           max={totalPages}
           value={currentPage}
           onChange={handlePageInputChange}
           className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
+          aria-label="מספר עמוד נוכחי"
         />
         <span className="hebrew-text text-sm text-muted-foreground">
           / {totalPages}

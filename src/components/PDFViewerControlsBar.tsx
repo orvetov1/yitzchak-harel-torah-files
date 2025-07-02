@@ -32,6 +32,8 @@ const PDFViewerControlsBar = ({
       
       <div className="flex items-center gap-2">
         <input
+          id="pdf-controls-page-input"
+          name="pdfControlsPageNumber"
           type="number"
           min="1"
           max={totalPages}
@@ -43,6 +45,7 @@ const PDFViewerControlsBar = ({
             }
           }}
           className="w-16 px-2 py-1 text-center border border-border rounded text-sm hebrew-text"
+          aria-label="מספר עמוד נוכחי"
         />
         <span className="hebrew-text text-sm text-muted-foreground">
           / {totalPages}

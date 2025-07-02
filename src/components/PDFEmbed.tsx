@@ -13,6 +13,7 @@ interface PDFEmbedProps {
 const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFEmbedProps) => {
   const [embedMethod, setEmbedMethod] = useState<'embed' | 'object' | 'fallback'>('embed');
   const [hasError, setHasError] = useState(false);
+  const [corsError, setCorsError] = useState(false);
   const embedRef = useRef<HTMLEmbedElement>(null);
   const objectRef = useRef<HTMLObjectElement>(null);
 
@@ -22,20 +23,40 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
   };
 
   const handleObjectError = () => {
-    console.log('🚫 Object method failed, showing fallback');
+    console.log('🚫 Object method failed, checking for CORS issues');
+    setCorsError(true);
     setEmbedMethod('fallback');
     setHasError(true);
-    onError?.('PDF cannot be displayed in browser');
+    onError?.('PDF cannot be displayed in browser - possible CORS issue');
   };
 
   const openInNewTab = () => {
-    window.open(src, '_blank', 'noopener,noreferrer');
+    // Handle blob URLs with proper noopener/noreferrer
+    if (src.startsWith('blob:')) {
+      const link = document.createElement('a');
+      link.href = src;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.download = title.endsWith('.pdf') ? title : `${title}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      window.open(src, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const handleRetry = () => {
+    setEmbedMethod('embed');
+    setHasError(false);
+    setCorsError(false);
   };
 
   useEffect(() => {
     // Reset when src changes
     setEmbedMethod('embed');
     setHasError(false);
+    setCorsError(false);
   }, [src]);
 
   if (embedMethod === 'fallback' || hasError) {
@@ -43,8 +64,13 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
       <div className={`flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-300 ${className}`}>
         <div className="text-center space-y-4 p-8">
           <div className="text-gray-600 hebrew-text">
-            לא ניתן להציג את הקובץ בדפדפן
+            {corsError ? 'בעיית CORS - לא ניתן להציג את הקובץ בדפדפן' : 'לא ניתן להציג את הקובץ בדפדפן'}
           </div>
+          {corsError && (
+            <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded hebrew-text">
+              שרת הקובץ לא מאפשר הצגה מתחומים אחרים (CORS)
+            </div>
+          )}
           <div className="flex gap-2 justify-center">
             <Button onClick={openInNewTab} className="hebrew-text">
               <ExternalLink size={16} className="ml-2" />
@@ -52,7 +78,7 @@ const PDFEmbed = ({ src, title = 'PDF Document', className = '', onError }: PDFE
             </Button>
             <Button 
               variant="outline" 
-              onClick={() => setEmbedMethod('embed')}
+              onClick={handleRetry}
               className="hebrew-text"
             >
               <RefreshCw size={16} className="ml-2" />

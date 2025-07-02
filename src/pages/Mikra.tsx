@@ -7,6 +7,13 @@ import { usePDFFiles } from '../hooks/usePDFFiles';
 const Mikra = () => {
   const { items, isLoading, error } = usePDFFiles('mikra');
 
+  // Ensure we're in standards mode for PDF rendering
+  React.useEffect(() => {
+    if (document.compatMode === 'BackCompat') {
+      console.warn('Page is in Quirks Mode - this may affect PDF rendering');
+    }
+  }, []);
+
   if (isLoading) {
     return (
       <Layout>
@@ -44,6 +51,7 @@ const Mikra = () => {
             <div className="bg-accent/20 border border-accent rounded-md p-4">
               <p className="hebrew-text text-sm text-muted-foreground">
                 <strong>הוראות צפייה והורדה:</strong> לחצו על "צפה" לקריאה ישירה בדפדפן, או על "הורד" לשמירת הקובץ למחשב שלכם.
+                במקרה של בעיות תצוגה, נסו לפתוח את הקובץ בטאב חדש.
               </p>
             </div>
           </div>
