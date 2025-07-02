@@ -50,15 +50,15 @@ export const createOptimizedPDFOptions = (fileUrl: string) => {
     url: fileUrl,
     httpHeaders: {
       'Accept': 'application/pdf,*/*',
-      'Cache-Control': 'public, max-age=3600'
+    'Cache-Control': 'no-cache' // שינוי כאן
     },
     withCredentials: false,
     // Optimize for Supabase Storage
-    disableAutoFetch: false, // Allow range requests if supported
-    disableStream: false,    // Allow streaming if supported
-    disableRange: false,     // Allow range requests if supported
+    disableAutoFetch: true, // Allow range requests if supported
+    disableStream: true,    // Allow streaming if supported
+    disableRange: true,     // Allow range requests if supported
     // Fallback options for problematic servers
-    useWorkerFetch: false,   // Use main thread for fetching
+    useWorkerFetch: true,   // Use main thread for fetching
     isEvalSupported: false,  // Disable eval for security
     verbosity: process.env.NODE_ENV === 'development' ? 1 : 0
   };
