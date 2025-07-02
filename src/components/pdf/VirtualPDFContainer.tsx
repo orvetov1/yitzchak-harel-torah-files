@@ -1,14 +1,14 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '../ui/button';
 import { usePDFLargeLazyViewer } from '../../hooks/pdf/usePDFLargeLazyViewer';
 import { useKeyboardNavigation } from '../../hooks/useKeyboardNavigation';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import PDFTableOfContents from '../PDFTableOfContents';
-import EnhancedPDFControls from '../EnhancedPDFControls';
-import VirtualPDFPageRenderer from './VirtualPDFPageRenderer';
-import VirtualPDFStatusBar from './VirtualPDFStatusBar';
-import { ensurePDFWorkerReady } from '../../utils/pdfWorkerAutoInitializer';
+import VirtualPDFLoadingStates from './VirtualPDFLoadingStates';
+import VirtualPDFProcessingState from './VirtualPDFProcessingState';
+import VirtualPDFMainViewer from './VirtualPDFMainViewer';
+import { usePDFWorkerInitialization } from './hooks/usePDFWorkerInitialization';
 
 interface VirtualPDFContainerProps {
   pdfFileId: string;
@@ -16,13 +16,14 @@ interface VirtualPDFContainerProps {
 }
 
 const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) => {
-  const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
-  const [workerInitializing, setWorkerInitializing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef);
 
   console.log(`🚀 VirtualPDFContainer initialized with pdfFileId: ${pdfFileId}`);
+
+  // Initialize PDF Worker
+  const { isWorkerReady, workerInitializing } = usePDFWorkerInitialization();
 
   // Use the new large lazy viewer
   const {
@@ -46,33 +47,6 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     reload
   } = usePDFLargeLazyViewer(pdfFileId);
 
-  // Check if PDF Worker is ready
-  useEffect(() => {
-    const checkWorker = async () => {
-      const { isPDFWorkerReady } = await import('../../utils/pdfWorkerLoader');
-      const ready = await isPDFWorkerReady();
-      setIsWorkerReady(ready);
-    };
-    
-    checkWorker();
-  }, []);
-
-  // Auto-initialize PDF Worker when container opens
-  useEffect(() => {
-    const initializeWorker = async () => {
-      setWorkerInitializing(true);
-      try {
-        await ensurePDFWorkerReady();
-      } catch (error) {
-        console.error('❌ Failed to initialize PDF Worker:', error);
-      } finally {
-        setWorkerInitializing(false);
-      }
-    };
-
-    initializeWorker();
-  }, []);
-
   // Enable keyboard navigation
   useKeyboardNavigation({
     onPrevPage: goToPrevPage,
@@ -91,54 +65,34 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     workerInitializing
   });
 
-  if (!isWorkerReady) {
-    return <div>מאתחל מנוע PDF...</div>;
-  }
-
-  if (error) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
-        <div className="text-red-600 mb-4 text-lg">{error}</div>
-        <div className="space-y-2">
-          <Button onClick={reload} className="hebrew-text mr-2">נסה שוב</Button>
-          <Button onClick={onClose} variant="outline" className="hebrew-text">סגור</Button>
-        </div>
-      </div>
-    );
-  }
-
-  if ((isLoading && !fileInfo) || workerInitializing) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
-        <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-4"></div>
-        <div>
-          {workerInitializing ? 'מכין מנוע PDF...' : 'מכין את הקובץ...'}
-        </div>
-      </div>
-    );
-  }
-
-  // Allow viewing even if processing is not completed - check if we have pages
-  const canViewFile = fileInfo && (
-    fileInfo.processingStatus === 'completed' || 
-    totalPages > 0 || 
-    visiblePages.some(p => isPageLoaded(p))
+  // Show loading states
+  const loadingState = (
+    <VirtualPDFLoadingStates
+      isWorkerReady={isWorkerReady}
+      workerInitializing={workerInitializing}
+      isLoading={isLoading}
+      fileInfo={fileInfo}
+      error={error}
+      onReload={reload}
+      onClose={onClose}
+    />
   );
 
-  if (fileInfo && !canViewFile) {
-    return (
-      <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
-        <div className="text-lg mb-4">הקובץ עדיין מעובד...</div>
-        <div className="text-sm text-muted-foreground mb-4">
-          מצב עיבוד: {fileInfo.processingStatus || 'לא ידוע'}
-        </div>
-        <div className="space-y-2">
-          <Button onClick={reload} className="hebrew-text mr-2">רענן</Button>
-          <Button onClick={onClose} variant="outline" className="hebrew-text">סגור</Button>
-        </div>
-      </div>
-    );
-  }
+  if (loadingState) return loadingState;
+
+  // Show processing state
+  const processingState = (
+    <VirtualPDFProcessingState
+      fileInfo={fileInfo}
+      totalPages={totalPages}
+      visiblePages={visiblePages}
+      isPageLoaded={isPageLoaded}
+      onReload={reload}
+      onClose={onClose}
+    />
+  );
+
+  if (processingState) return processingState;
 
   return (
     <div 
@@ -158,66 +112,26 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
       )}
 
       {/* Main viewer */}
-      <div className="flex-1 flex flex-col">
-        <EnhancedPDFControls
-          currentPage={currentPage}
-          totalPages={totalPages}
-          scale={scale}
-          isFullscreen={isFullscreen}
-          showSidebar={showSidebar}
-          onPrevPage={goToPrevPage}
-          onNextPage={goToNextPage}
-          onZoomIn={zoomIn}
-          onZoomOut={zoomOut}
-          onToggleFullscreen={toggleFullscreen}
-          onToggleSidebar={() => setShowSidebar(!showSidebar)}
-          onPageChange={goToPage}
-        />
-
-        <div className="flex-1 overflow-auto bg-gray-100 p-4">
-          <div className="max-w-4xl mx-auto space-y-6">
-            {visiblePages.map(pageNumber => {
-              const pageUrl = getPageUrl(pageNumber);
-              const isCurrentPage = pageNumber === currentPage;
-              const pageLoaded = isPageLoaded(pageNumber);
-              const pageLoading = isPageLoading(pageNumber);
-              const pageError = isPageError(pageNumber);
-              
-              console.log(`🔍 Rendering page ${pageNumber}:`, {
-                hasPageUrl: !!pageUrl,
-                isCurrent: isCurrentPage,
-                isLoaded: pageLoaded,
-                isLoading: pageLoading,
-                hasError: pageError
-              });
-              
-              return (
-                <VirtualPDFPageRenderer
-                  key={pageNumber}
-                  pageNumber={pageNumber}
-                  pageUrl={pageUrl}
-                  scale={scale}
-                  totalPages={totalPages}
-                  isCurrentPage={isCurrentPage}
-                  isPageLoading={pageLoading}
-                  isPageLoaded={pageLoaded}
-                  isPageError={pageError}
-                  onLoadPage={() => retryPage(pageNumber)}
-                />
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Status bar */}
-        <VirtualPDFStatusBar
-          currentPage={currentPage}
-          totalPages={totalPages}
-          loadedPagesCount={visiblePages.filter(p => isPageLoaded(p)).length}
-          visiblePages={visiblePages}
-          isFullscreen={isFullscreen}
-        />
-      </div>
+      <VirtualPDFMainViewer
+        currentPage={currentPage}
+        totalPages={totalPages}
+        scale={scale}
+        isFullscreen={isFullscreen}
+        showSidebar={showSidebar}
+        visiblePages={visiblePages}
+        onPrevPage={goToPrevPage}
+        onNextPage={goToNextPage}
+        onZoomIn={zoomIn}
+        onZoomOut={zoomOut}
+        onToggleFullscreen={toggleFullscreen}
+        onToggleSidebar={() => setShowSidebar(!showSidebar)}
+        onPageChange={goToPage}
+        getPageUrl={getPageUrl}
+        isPageLoaded={isPageLoaded}
+        isPageLoading={isPageLoading}
+        isPageError={isPageError}
+        retryPage={retryPage}
+      />
 
       {/* Close button */}
       <Button

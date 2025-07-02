@@ -1,5 +1,4 @@
 
-
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -14,7 +13,8 @@ import './utils/pdfWorkerLoader'; // Initialize optimized PDF worker
 
 const initializePDF = async () => {
   try {
-    await import('./utils/pdfWorkerLoader').then(({ initWorker }) => initWorker());
+    const { initializePDFWorkerIfNeeded } = await import('./utils/pdfWorkerLoader');
+    await initializePDFWorkerIfNeeded();
     console.log('PDF Worker initialized successfully');
   } catch (error) {
     console.error('Failed to initialize PDF Worker:', error);
