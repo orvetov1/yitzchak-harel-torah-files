@@ -1,63 +1,49 @@
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
+import { usePDFMemoryManager } from './usePDFMemoryManager';
 
-export const usePDFCacheManager = () => {
-  const cacheRef = useRef<Map<number, string>>(new Map());
-  const blobUrlsRef = useRef<Set<string>>(new Set());
+export const usePDFCacheManager = (maxCachedPages: number = 15) => {
+  const memoryManager = usePDFMemoryManager(maxCachedPages);
 
+  // Enhanced logging
   const getPageUrl = useCallback((pageNumber: number): string | null => {
-    const url = cacheRef.current.get(pageNumber) || null;
-    console.log(`📋 getPageUrl(${pageNumber}): ${url ? 'found' : 'not found'}`);
+    const url = memoryManager.getPageUrl(pageNumber);
+    console.log(`📋 Enhanced getPageUrl(${pageNumber}): ${url ? 'found' : 'not found'}`);
     return url;
-  }, []);
+  }, [memoryManager]);
 
   const isPageLoaded = useCallback((pageNumber: number): boolean => {
-    const loaded = cacheRef.current.has(pageNumber);
-    console.log(`🔍 isPageLoaded(${pageNumber}): ${loaded}`);
+    const loaded = memoryManager.isPageLoaded(pageNumber);
+    console.log(`🔍 Enhanced isPageLoaded(${pageNumber}): ${loaded}`);
     return loaded;
-  }, []);
+  }, [memoryManager]);
 
   const setPageUrl = useCallback((pageNumber: number, url: string) => {
-    console.log(`✅ setPageUrl(${pageNumber}): ${url}`);
-    cacheRef.current.set(pageNumber, url);
-    
-    // Track blob URLs for cleanup
-    if (url.startsWith('blob:')) {
-      blobUrlsRef.current.add(url);
-      console.log(`🔗 Tracking blob URL for cleanup: ${url}`);
-    }
-  }, []);
+    console.log(`✅ Enhanced setPageUrl(${pageNumber}): ${url}`);
+    memoryManager.setPageUrl(pageNumber, url);
+  }, [memoryManager]);
 
   const getCacheSize = useCallback((): number => {
-    return cacheRef.current.size;
-  }, []);
+    return memoryManager.cacheSize();
+  }, [memoryManager]);
 
   const cleanup = useCallback(() => {
-    console.log(`🧹 Cleaning up PDF cache - ${cacheRef.current.size} cached pages, ${blobUrlsRef.current.size} blob URLs`);
-    
-    // Revoke all blob URLs
-    blobUrlsRef.current.forEach(url => {
-      console.log(`🗑️ Revoking blob URL: ${url}`);
-      URL.revokeObjectURL(url);
-    });
-    
-    // Clear all references
-    cacheRef.current.clear();
-    blobUrlsRef.current.clear();
-    
-    console.log(`✅ Cache cleanup completed`);
-  }, []);
+    console.log(`🧹 Enhanced PDF cache cleanup`);
+    memoryManager.cleanup();
+  }, [memoryManager]);
 
-  // Cleanup on unmount
+  // Log memory stats periodically
   useEffect(() => {
-    return () => {
-      console.log(`🏁 usePDFCacheManager unmounting - performing cleanup`);
-      cleanup();
-    };
-  }, [cleanup]);
+    const interval = setInterval(() => {
+      const stats = memoryManager.getMemoryStats();
+      console.log(`📊 Enhanced cache stats: ${stats.cacheSize} pages, ${stats.blobUrls} blobs, ${stats.memoryUsage}`);
+    }, 60000); // Every minute
+
+    return () => clearInterval(interval);
+  }, [memoryManager]);
 
   return {
-    cacheRef,
+    cacheRef: memoryManager.cacheRef,
     getPageUrl,
     isPageLoaded,
     setPageUrl,
