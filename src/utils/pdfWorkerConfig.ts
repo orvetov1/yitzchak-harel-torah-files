@@ -44,8 +44,7 @@ export class PDFWorkerManager {
     console.log(`🚀 Initializing PDF Worker (attempt ${this.diagnostics.attempts})`);
 
     // Prioritize local static file
-    const localWorkerUrl = `${window.location.origin}/pdf.worker.min.js`;
-
+    const localWorkerUrl = `${window.location.origin}/pdf.worker.min.js`; // יעדף את הקובץ המקומי
     // CDN fallbacks with version matching the installed pdfjs-dist
     const cdnWorkerUrls = [
       `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
@@ -96,13 +95,13 @@ export class PDFWorkerManager {
       console.log(`🧪 Testing worker source availability: ${workerSrc}`);
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 7000); // Increased timeout to 7 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 7000); // הגדלת Timeout
       
       const response = await fetch(workerSrc, { 
         method: 'HEAD',
         signal: controller.signal,
-        mode: 'cors', // Ensure CORS is handled
-        cache: 'no-store' // Prevent caching issues during testing
+        mode: 'cors', // ודא טיפול ב-CORS
+        cache: 'no-store' // מנע בעיות Cache במהלך בדיקה
       });
       
       clearTimeout(timeoutId);
@@ -115,7 +114,7 @@ export class PDFWorkerManager {
     }
   }
 
-  private async testWorker(timeoutMs = 10000): Promise<boolean> { // Increased functionality test timeout to 10 seconds
+  private async testWorker(timeoutMs = 10000): Promise<boolean> { // הגדלת Timeout לבדיקת פונקציונליות
     try {
       console.log('🧪 Testing PDF Worker functionality...');
       
@@ -214,7 +213,7 @@ export const initializePDFWorker = async (retries = 2): Promise<boolean> => {
     }
     
     if (attempt <= retries) {
-      console.log(`⏳ Retrying PDF Worker initialization in 2 seconds...`); // Increased retry delay
+      console.log(`⏳ Retrying PDF Worker initialization in 2 seconds...`); // הגדלת זמן ההמתנה לניסיון חוזר
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
