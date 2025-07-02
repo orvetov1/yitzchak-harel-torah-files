@@ -16,6 +16,7 @@ interface VirtualPDFContainerProps {
 }
 
 const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) => {
+   const [isWorkerReady, setIsWorkerReady] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [workerInitializing, setWorkerInitializing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,36 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     retryPage,
     reload
   } = usePDFLargeLazyViewer(pdfFileId);
+ useEffect(() => {
+    const checkWorker = async () => {
+      const { isPDFWorkerReady } = await import('../../utils/pdfWorkerLoader');
+      const ready = await isPDFWorkerReady();
+      setIsWorkerReady(ready);
+    };
+    
+    checkWorker();
+  }, []);
 
+  if (!isWorkerReady) {
+    return <div>מאתחל מנוע PDF...</div>;
+  }
+
+  return (
+    useEffect(() => {
+    const checkWorker = async () => {
+      const { isPDFWorkerReady } = await import('../../utils/pdfWorkerLoader');
+      const ready = await isPDFWorkerReady();
+      setIsWorkerReady(ready);
+    };
+    
+    checkWorker();
+  }, []);
+
+  if (!isWorkerReady) {
+    return <div>מאתחל מנוע PDF...</div>;
+  }
+
+  return (
   // Auto-initialize PDF Worker when container opens
   useEffect(() => {
     const initializeWorker = async () => {
@@ -56,6 +86,8 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
       } finally {
         setWorkerInitializing(false);
       }
+      )
+    }
     };
 
     initializeWorker();
