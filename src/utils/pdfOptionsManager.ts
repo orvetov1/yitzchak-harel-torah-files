@@ -16,6 +16,7 @@ export interface OptimizedPDFOptions {
   isEvalSupported: boolean;
   enableXfa: boolean;
   useSystemFonts: boolean;
+  useWorkerFetch: boolean;
 }
 
 export const usePDFOptions = (fileSize?: number, complexity?: string): OptimizedPDFOptions => {
@@ -26,8 +27,9 @@ export const usePDFOptions = (fileSize?: number, complexity?: string): Optimized
       cMapPacked: true,
       standardFontDataUrl: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
       
-      // Network optimization
+      // Network optimization for Supabase
       httpHeaders: {
+        'Accept': 'application/pdf,*/*',
         'Cache-Control': 'public, max-age=3600'
       },
       withCredentials: false,
@@ -35,7 +37,7 @@ export const usePDFOptions = (fileSize?: number, complexity?: string): Optimized
       // Logging level (0 = errors only, 1 = warnings, 5 = everything)
       verbosity: process.env.NODE_ENV === 'development' ? 1 : 0,
       
-      // Performance optimizations based on file characteristics
+      // Performance optimizations - start conservative for Supabase
       disableAutoFetch: false,
       disableStream: false,
       disableRange: false,
@@ -46,10 +48,11 @@ export const usePDFOptions = (fileSize?: number, complexity?: string): Optimized
       // Feature toggles
       isEvalSupported: false, // Disable eval for security
       enableXfa: false, // Disable XFA forms for performance
-      useSystemFonts: true // Use system fonts when possible
+      useSystemFonts: true, // Use system fonts when possible
+      useWorkerFetch: false // Use main thread for fetching (more reliable with Supabase)
     };
 
-    // Adjust options based on complexity
+    // Adjust options based on complexity or file size
     if (complexity === 'high' || (fileSize && fileSize > 10 * 1024 * 1024)) {
       return {
         ...baseOptions,
@@ -70,7 +73,7 @@ export const usePDFOptions = (fileSize?: number, complexity?: string): Optimized
   }, [fileSize, complexity]);
 };
 
-// Memoized Document options factory
+// Enhanced Document options factory with better Supabase support
 export const createDocumentOptions = (
   fileUrl: string, 
   fileSize?: number, 
@@ -81,7 +84,7 @@ export const createDocumentOptions = (
   return {
     url: fileUrl,
     ...options,
-    // Add request interception for better error handling
+    // Enhanced request handling for Supabase Storage
     onProgress: (progressData: { loaded: number; total: number }) => {
       const percent = Math.round((progressData.loaded / progressData.total) * 100);
       console.log(`📥 PDF Download progress: ${percent}% (${progressData.loaded}/${progressData.total})`);
@@ -94,4 +97,44 @@ export const createDocumentOptions = (
       });
     }
   };
+};
+
+// Test if file is accessible and get content type
+export const validatePDFFile = async (fileUrl: string): Promise<{
+  isAccessible: boolean;
+  contentType: string | null;
+  fileSize: number;
+  supportsRange: boolean;
+}> => {
+  try {
+    const response = await fetch(fileUrl, { method: 'HEAD' });
+    
+    const contentType = response.headers.get('Content-Type');
+    const fileSize = parseInt(response.headers.get('Content-Length') || '0');
+    const acceptRanges = response.headers.get('Accept-Ranges');
+    
+    const validation = {
+      isAccessible: response.ok,
+      contentType,
+      fileSize,
+      supportsRange: acceptRanges === 'bytes'
+    };
+    
+    console.log('📋 PDF file validation:', validation);
+    
+    if (contentType && !contentType.includes('pdf')) {
+      console.warn('⚠️ File may not be a PDF:', contentType);
+    }
+    
+    return validation;
+    
+  } catch (error) {
+    console.error('❌ PDF file validation failed:', error);
+    return {
+      isAccessible: false,
+      contentType: null,
+      fileSize: 0,
+      supportsRange: false
+    };
+  }
 };

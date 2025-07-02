@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Document, Page } from 'react-pdf';
-import { usePDFOptions } from '../../../utils/pdfOptionsManager';
+import { loadPDFDocument, createOptimizedPDFOptions } from '../../../utils/pdfWorkerAutoInitializer';
 
 interface PDFDocumentRendererProps {
   pageNumber: number;
@@ -10,10 +10,10 @@ interface PDFDocumentRendererProps {
 }
 
 const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRendererProps) => {
-  // Get optimized PDF options
-  const pdfOptions = usePDFOptions();
-  
   console.log(`📄 Rendering optimized PDF page ${pageNumber} with react-pdf: ${pageUrl}`);
+  
+  // Use optimized PDF options for better compatibility
+  const pdfOptions = createOptimizedPDFOptions(pageUrl);
   
   return (
     <div 
@@ -21,8 +21,7 @@ const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRenderer
       style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
     >
       <Document
-        file={pageUrl}
-        options={pdfOptions}
+        file={pdfOptions}
         onLoadSuccess={(pdf) => {
           console.log(`✅ Optimized PDF document loaded for page ${pageNumber}, total pages: ${pdf.numPages}`);
         }}
@@ -33,16 +32,40 @@ const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRenderer
             url: pageUrl
           });
         }}
-        loading={null} // We handle loading in PDFProgressiveLoader
-        error={null} // We handle errors in PDFErrorBoundary
+        loading={
+          <div className="flex items-center justify-center h-96">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="mr-2 hebrew-text">טוען מסמך...</span>
+          </div>
+        }
+        error={
+          <div className="flex items-center justify-center h-96 text-red-600 hebrew-text">
+            <div className="text-center">
+              <div className="mb-2">שגיאה בטעינת המסמך</div>
+              <div className="text-sm">נסה לרענן או להוריד ישירות</div>
+            </div>
+          </div>
+        }
       >
         <Page
           pageNumber={1}
           scale={scale}
           renderTextLayer={false}
           renderAnnotationLayer={false}
-          loading={null} // We handle loading in PDFProgressiveLoader
-          error={null} // We handle errors in PDFErrorBoundary
+          loading={
+            <div className="flex items-center justify-center h-96">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <span className="mr-2 hebrew-text">טוען עמוד...</span>
+            </div>
+          }
+          error={
+            <div className="flex items-center justify-center h-96 text-red-600 hebrew-text">
+              <div className="text-center">
+                <div className="mb-2">שגיאה בטעינת עמוד {pageNumber}</div>
+                <div className="text-sm">העמוד עלול להיות פגום</div>
+              </div>
+            </div>
+          }
           onLoadSuccess={() => {
             console.log(`✅ Optimized page ${pageNumber} rendered successfully`);
           }}

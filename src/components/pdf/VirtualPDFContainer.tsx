@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { usePDFLargeLazyViewer } from '../../hooks/pdf/usePDFLargeLazyViewer';
 import { useKeyboardNavigation } from '../../hooks/useKeyboardNavigation';
@@ -8,6 +8,7 @@ import PDFTableOfContents from '../PDFTableOfContents';
 import EnhancedPDFControls from '../EnhancedPDFControls';
 import VirtualPDFPageRenderer from './VirtualPDFPageRenderer';
 import VirtualPDFStatusBar from './VirtualPDFStatusBar';
+import { ensurePDFWorkerReady } from '../../utils/pdfWorkerAutoInitializer';
 
 interface VirtualPDFContainerProps {
   pdfFileId: string;
@@ -16,6 +17,7 @@ interface VirtualPDFContainerProps {
 
 const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) => {
   const [showSidebar, setShowSidebar] = useState(false);
+  const [workerInitializing, setWorkerInitializing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen(containerRef);
 
@@ -43,6 +45,22 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     reload
   } = usePDFLargeLazyViewer(pdfFileId);
 
+  // Auto-initialize PDF Worker when container opens
+  useEffect(() => {
+    const initializeWorker = async () => {
+      setWorkerInitializing(true);
+      try {
+        await ensurePDFWorkerReady();
+      } catch (error) {
+        console.error('❌ Failed to initialize PDF Worker:', error);
+      } finally {
+        setWorkerInitializing(false);
+      }
+    };
+
+    initializeWorker();
+  }, []);
+
   // Enable keyboard navigation
   useKeyboardNavigation({
     onPrevPage: goToPrevPage,
@@ -57,7 +75,8 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     visiblePagesCount: visiblePages.length,
     isLoading,
     error,
-    processingStatus: fileInfo?.processingStatus
+    processingStatus: fileInfo?.processingStatus,
+    workerInitializing
   });
 
   if (error) {
@@ -72,11 +91,13 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
     );
   }
 
-  if (isLoading && !fileInfo) {
+  if ((isLoading && !fileInfo) || workerInitializing) {
     return (
       <div className="flex flex-col h-full items-center justify-center text-center hebrew-text p-8 bg-white">
         <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-primary mx-auto mb-4"></div>
-        <div>מכין את הקובץ...</div>
+        <div>
+          {workerInitializing ? 'מכין מנוע PDF...' : 'מכין את הקובץ...'}
+        </div>
       </div>
     );
   }
