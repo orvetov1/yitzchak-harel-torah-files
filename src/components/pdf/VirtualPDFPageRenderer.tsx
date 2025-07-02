@@ -7,7 +7,7 @@ import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import { Button } from '../ui/button';
 import { RefreshCw, AlertTriangle, Download, Settings, FileX } from 'lucide-react';
-import { getPDFWorkerStatus, isPDFWorkerReady, resetPDFWorker, getPDFWorkerDiagnostics } from '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus, isPDFWorkerReady, resetPDFWorker, getPDFWorkerDiagnostics, initializePDFWorkerIfNeeded } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -38,9 +38,19 @@ const VirtualPDFPageRenderer = ({
     return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
   };
 
-  // Get worker status
+  // Get worker status with better checking
   const isWorkerAvailable = isPDFWorkerReady();
   const workerStatus = getPDFWorkerStatus();
+
+  console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
+    pageUrl: pageUrl ? `Available (${pageUrl.substring(0, 50)}...)` : 'null',
+    isCurrentPage,
+    isPageLoading,
+    isPageLoaded,
+    isPageError,
+    workerStatus,
+    isWorkerAvailable
+  });
 
   // Enhanced render mode logic
   const getRenderMode = (url: string | null) => {
@@ -58,24 +68,25 @@ const VirtualPDFPageRenderer = ({
 
   const renderMode = getRenderMode(pageUrl);
 
-  console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
-    pageUrl: pageUrl ? `Available` : 'null',
-    renderMode,
-    isCurrentPage,
-    isPageLoading,
-    isPageLoaded,
-    isPageError,
-    workerStatus
-  });
-
-  // Handle worker retry
+  // Handle worker retry with initialization
   const handleWorkerRetry = async () => {
-    console.log('🔄 Attempting to reset PDF Worker...');
-    await resetPDFWorker();
-    // Wait a moment for the worker to initialize
-    setTimeout(() => {
+    console.log('🔄 Attempting to initialize/reset PDF Worker...');
+    try {
+      // First try to initialize if needed
+      const initialized = await initializePDFWorkerIfNeeded();
+      if (!initialized) {
+        // If initialization failed, try reset
+        await resetPDFWorker();
+      }
+      // Wait a moment for the worker to be ready
+      setTimeout(() => {
+        onLoadPage();
+      }, 1000);
+    } catch (error) {
+      console.error('❌ Worker retry failed:', error);
+      // Still try to reload the page
       onLoadPage();
-    }, 1000);
+    }
   };
 
   // Handle direct download
@@ -146,7 +157,7 @@ const VirtualPDFPageRenderer = ({
                   <FileX size={48} className="mx-auto text-red-600" />
                   <div className="text-red-700 text-lg font-medium">קובץ מנוע ה-PDF פגום</div>
                   <div className="text-sm text-red-600">
-                    קובץ המנוע (pdf.worker.min.js) חסר או פגום. זה מונע מהמערכת לעבד קבצי PDF.
+                    קובץ המנוע (pdf.worker.mjs) חסר או פגום. זה מונע מהמערכת לעבד קבצי PDF.
                   </div>
                 </>
               ) : (
@@ -154,7 +165,7 @@ const VirtualPDFPageRenderer = ({
                   <Settings size={48} className="mx-auto text-amber-600" />
                   <div className="text-amber-700 text-lg font-medium">מנוע ה-PDF לא מוכן</div>
                   <div className="text-sm text-amber-600">
-                    יש בעיה באתחול מנוע ה-PDF. זה עלול לקרות בעיקר בטעינה ראשונה.
+                    יש בעיה באתחול מנוע ה-PDF. מנסה לאתחל אוטומטית...
                   </div>
                 </>
               )}
@@ -175,29 +186,13 @@ const VirtualPDFPageRenderer = ({
               </div>
               
               <div className="flex flex-col gap-2">
-                {isCorruptedFile ? (
-                  <>
-                    <div className="bg-red-100 p-3 rounded border text-sm text-red-700">
-                      <div className="font-medium mb-1">פתרון נדרש:</div>
-                      <div>יש להחליף את הקובץ pdf.worker.min.js בתיקיית public/ עם קובץ תקין מספריית pdfjs-dist</div>
-                    </div>
-                    <Button
-                      onClick={handleDirectDownload}
-                      className="hebrew-text"
-                    >
-                      <Download size={16} className="ml-2" />
-                      הורד קובץ למחשב
-                    </Button>
-                  </>
-                ) : (
-                  <Button
-                    onClick={handleWorkerRetry}
-                    className="hebrew-text"
-                  >
-                    <RefreshCw size={16} className="ml-2" />
-                    אתחל מנוע PDF מחדש
-                  </Button>
-                )}
+                <Button
+                  onClick={handleWorkerRetry}
+                  className="hebrew-text"
+                >
+                  <RefreshCw size={16} className="ml-2" />
+                  {isCorruptedFile ? 'נסה בכל זאת' : 'אתחל מנוע PDF'}
+                </Button>
                 
                 <Button
                   onClick={handleDirectDownload}

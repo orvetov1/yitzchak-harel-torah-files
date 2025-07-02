@@ -3,6 +3,7 @@ import React from 'react';
 import Layout from '../components/Layout';
 import PDFList from '../components/PDFList';
 import { usePDFFiles } from '../hooks/usePDFFiles';
+import { initializePDFWorkerIfNeeded } from '../utils/pdfWorkerLoader';
 
 const Mikra = () => {
   const { items, isLoading, error } = usePDFFiles('mikra');
@@ -12,6 +13,25 @@ const Mikra = () => {
     if (document.compatMode === 'BackCompat') {
       console.warn('Page is in Quirks Mode - this may affect PDF rendering');
     }
+  }, []);
+
+  // Initialize PDF Worker when user enters the page
+  React.useEffect(() => {
+    const initWorker = async () => {
+      console.log('🚀 Mikra page loaded - initializing PDF Worker...');
+      try {
+        const success = await initializePDFWorkerIfNeeded();
+        if (success) {
+          console.log('✅ PDF Worker ready for Mikra page');
+        } else {
+          console.warn('⚠️ PDF Worker initialization had issues on Mikra page');
+        }
+      } catch (error) {
+        console.error('❌ PDF Worker initialization failed on Mikra page:', error);
+      }
+    };
+
+    initWorker();
   }, []);
 
   if (isLoading) {
