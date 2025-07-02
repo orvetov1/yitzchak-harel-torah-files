@@ -101,9 +101,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           try {
             const { data: fileData, error: downloadError } = await supabase.storage
               .from('pdf-files')
-              .download(pageData.file_path, {
-                signal: abortController.signal
-              });
+              .download(pageData.file_path);
 
             if (downloadError || !fileData) {
               throw new Error(`Failed to download page ${pageNumber}: ${downloadError?.message}`);
@@ -118,10 +116,6 @@ export const usePDFPageLoader = (pdfFileId: string) => {
             console.log(`✅ PDF blob URL for page ${pageNumber}: ${blobUrl}, size: ${fileData.size} bytes`);
             
           } catch (downloadError) {
-            if (downloadError.name === 'AbortError') {
-              console.log(`🚫 Download aborted for page ${pageNumber}`);
-              return null;
-            }
             console.error(`❌ PDF download failed for page ${pageNumber}:`, downloadError);
             throw downloadError;
           }
@@ -145,9 +139,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           // Download main PDF and create blob URL
           const { data: fileData, error: downloadError } = await supabase.storage
             .from('pdf-files')
-            .download(pdfFile.file_path, {
-              signal: abortController.signal
-            });
+            .download(pdfFile.file_path);
 
           if (downloadError || !fileData) {
             throw new Error(`Failed to download main PDF: ${downloadError?.message}`);
@@ -162,10 +154,6 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           console.log(`✅ Main PDF blob URL for page ${pageNumber}: ${blobUrl}, size: ${fileData.size} bytes`);
           
         } catch (downloadError) {
-          if (downloadError.name === 'AbortError') {
-            console.log(`🚫 Main PDF download aborted for page ${pageNumber}`);
-            return null;
-          }
           console.error(`❌ Main PDF download failed:`, downloadError);
           throw downloadError;
         }
@@ -204,15 +192,6 @@ export const usePDFPageLoader = (pdfFileId: string) => {
     } catch (error) {
       // Clean up abort controller
       abortControllersRef.current.delete(pageNumber);
-
-      if (error.name === 'AbortError') {
-        console.log(`🚫 Page ${pageNumber} load was aborted`);
-        setState(prev => ({
-          ...prev,
-          loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
-        }));
-        return null;
-      }
 
       console.error(`❌ Failed to load page ${pageNumber} (attempt ${currentRetries + 1}):`, error);
       
