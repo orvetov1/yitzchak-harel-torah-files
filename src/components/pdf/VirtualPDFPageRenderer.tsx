@@ -40,7 +40,10 @@ const VirtualPDFPageRenderer = ({
 
   // Enhanced render mode logic
   const getRenderMode = (url: string | null) => {
-    if (!url) return 'fallback';
+    if (!url) {
+      console.log(`📄 Page ${pageNumber}: No URL available, using fallback mode`);
+      return 'fallback';
+    }
     
     // Always use image renderer for image files
     if (isImageFile(url)) {
@@ -60,9 +63,9 @@ const VirtualPDFPageRenderer = ({
 
   const renderMode = getRenderMode(pageUrl);
 
-  // Enhanced logging
+  // Enhanced logging for debugging
   console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
-    pageUrl: pageUrl ? 'available' : 'null',
+    pageUrl: pageUrl ? `Available (${pageUrl.substring(0, 50)}...)` : 'null',
     renderMode,
     isCurrentPage,
     isPageLoading,
@@ -106,12 +109,24 @@ const VirtualPDFPageRenderer = ({
                     pageUrl={pageUrl}
                     scale={scale}
                   />
-                ) : (
+                ) : renderMode === 'pdf' ? (
                   <PDFDocumentRenderer
                     pageNumber={pageNumber}
                     pageUrl={pageUrl}
                     scale={scale}
                   />
+                ) : (
+                  <div className="flex items-center justify-center h-96 hebrew-text bg-gray-50 border border-gray-200 rounded-lg">
+                    <div className="text-center space-y-4">
+                      <div className="text-muted-foreground">עמוד {pageNumber} לא זמין</div>
+                      <button
+                        onClick={() => onLoadPage(pageNumber)}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                      >
+                        נסה לטעון שוב
+                      </button>
+                    </div>
+                  </div>
                 )}
               </>
             )}

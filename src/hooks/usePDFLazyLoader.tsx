@@ -113,7 +113,7 @@ export const usePDFLazyLoader = (
     }
   }, [loadPageData, preloadPages, maxCachedPages, setPageUrl, state.currentPage, state.totalPages]);
 
-  // Initialize total pages count
+  // Initialize total pages count and load first page
   useEffect(() => {
     if (!pdfFileId) {
       console.log(`⚠️ No pdfFileId provided`);
@@ -139,19 +139,37 @@ export const usePDFLazyLoader = (
         const totalPages = data.num_pages_total || 1;
         console.log(`📊 Total pages found: ${totalPages}`);
 
+        // Update state with total pages first
         setState(prev => ({
           ...prev,
-          totalPages: totalPages
+          totalPages: totalPages,
+          currentPage: 1
         }));
 
-        // Load first page immediately
-        if (totalPages > 0) {
-          console.log(`🎯 Loading first page automatically`);
-          await loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
+        // Load first page immediately after setting totalPages
+        console.log(`🎯 Loading first page automatically after initializing totalPages=${totalPages}`);
+        
+        try {
+          const firstPageUrl = await loadPageData(1, cacheRef, maxCachedPages, setPageUrl);
+          console.log(`✅ First page loaded successfully with URL: ${firstPageUrl ? 'available' : 'null'}`);
+          
+          // Update loading state only after first page is loaded
           setState(prev => ({ ...prev, isLoading: false }));
-          console.log(`✅ First page loaded successfully`);
-        } else {
-          setState(prev => ({ ...prev, isLoading: false }));
+          
+          // Preload next few pages in background
+          if (totalPages > 1) {
+            console.log(`🔄 Preloading additional pages in background...`);
+            preloadPages(1, (page) => loadPageData(page, cacheRef, maxCachedPages, setPageUrl))
+              .catch(error => console.warn(`⚠️ Background preload failed:`, error));
+          }
+          
+        } catch (pageError) {
+          console.error(`❌ Failed to load first page:`, pageError);
+          setState(prev => ({ 
+            ...prev, 
+            isLoading: false,
+            error: `Failed to load first page: ${pageError instanceof Error ? pageError.message : 'Unknown error'}`
+          }));
         }
 
       } catch (error) {
@@ -165,7 +183,7 @@ export const usePDFLazyLoader = (
     };
 
     initializePagesCount();
-  }, [pdfFileId, loadPageData, maxCachedPages, setPageUrl]);
+  }, [pdfFileId, loadPageData, maxCachedPages, setPageUrl, preloadPages]);
 
   // Cleanup on unmount
   useEffect(() => {

@@ -21,19 +21,20 @@ export const usePDFPageLoader = (pdfFileId: string) => {
     // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
       const url = cacheRef.current.get(pageNumber)!;
-      console.log(`📋 Page ${pageNumber} already cached: ${url}`);
+      console.log(`📋 Page ${pageNumber} already cached: ${url.substring(0, 50)}...`);
       return url;
     }
 
     // Check if already loading
     if (state.loadingPages.has(pageNumber)) {
-      console.log(`⏳ Page ${pageNumber} already loading`);
+      console.log(`⏳ Page ${pageNumber} already loading, waiting...`);
       return null;
     }
 
     // Check retry count
     if (hasExceededMaxRetries(pageNumber, maxRetries)) {
       console.log(`❌ Page ${pageNumber} exceeded max retries (${maxRetries})`);
+      setError(`Page ${pageNumber} failed to load after ${maxRetries} attempts`);
       return null;
     }
 
@@ -48,6 +49,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
       let blobUrl: string;
 
       // Try to get from split pages first
+      console.log(`🔍 Checking for split page ${pageNumber}...`);
       const pageData = await loadSplitPage(pageNumber);
 
       if (pageData) {
@@ -55,23 +57,30 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         const isImageFile = pageData.file_path.match(/\.(png|jpg|jpeg|gif|webp)$/i);
         
         if (isImageFile) {
-          console.log(`🖼️ Split page ${pageNumber} is an image file`);
+          console.log(`🖼️ Split page ${pageNumber} is an image file at: ${pageData.file_path}`);
           blobUrl = getImageUrl(pageData.file_path, pageNumber);
         } else {
-          console.log(`📄 Split page ${pageNumber} is a PDF file`);
+          console.log(`📄 Split page ${pageNumber} is a PDF file at: ${pageData.file_path}`);
           const fileData = await downloadFile(pageData.file_path);
-          blobUrl = createBlobUrl(fileData, pageNumber, 'PDF');
+          blobUrl = createBlobUrl(fileData, pageNumber, 'Split PDF');
         }
       } else {
         console.log(`📄 No split page found for page ${pageNumber}, trying main PDF`);
         
         // Fallback to main PDF file
         const pdfFile = await loadMainPDF();
+        console.log(`📄 Loading from main PDF file: ${pdfFile.file_path}`);
         const fileData = await downloadFile(pdfFile.file_path);
         blobUrl = createBlobUrl(fileData, pageNumber, 'Main PDF');
       }
 
+      // Verify the URL is valid
+      if (!blobUrl || blobUrl === 'null' || blobUrl === 'undefined') {
+        throw new Error(`Invalid URL generated for page ${pageNumber}`);
+      }
+
       // Cache the result
+      console.log(`💾 Caching page ${pageNumber} with URL: ${blobUrl.substring(0, 50)}...`);
       cacheRef.current.set(pageNumber, blobUrl);
       setPageUrl(pageNumber, blobUrl);
 
@@ -91,7 +100,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
       setPageLoading(pageNumber, false);
       removeAbortController(pageNumber);
 
-      console.log(`✅ Page ${pageNumber} successfully loaded and cached: ${blobUrl}`);
+      console.log(`✅ Page ${pageNumber} successfully loaded and cached: ${blobUrl.substring(0, 50)}...`);
       return blobUrl;
 
     } catch (error) {
@@ -103,9 +112,15 @@ export const usePDFPageLoader = (pdfFileId: string) => {
       setPageLoading(pageNumber, false);
 
       // Schedule retry if we haven't exceeded max retries
-      scheduleRetry(pageNumber, () => {
-        loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl, maxRetries);
-      }, maxRetries);
+      const currentRetries = incrementRetryCount(pageNumber) - 1;
+      if (currentRetries < maxRetries) {
+        console.log(`🔄 Scheduling retry ${currentRetries + 1}/${maxRetries} for page ${pageNumber} in 2 seconds...`);
+        scheduleRetry(pageNumber, () => {
+          loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl, maxRetries);
+        }, maxRetries);
+      } else {
+        console.log(`❌ Page ${pageNumber} failed permanently after ${maxRetries} attempts`);
+      }
 
       return null;
     }
