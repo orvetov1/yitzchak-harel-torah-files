@@ -1,32 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-
-interface PDFPage {
-  id: string;
-  pageNumber: number;
-  filePath: string;
-  fileSize: number;
-}
-
-interface PDFFileInfo {
-  id: string;
-  title: string;
-  numPagesTotal: number | null;
-  processingStatus: string;
-}
-
-interface LargePDFViewerState {
-  currentPage: number;
-  scale: number;
-  visiblePages: number[];
-  loadedPages: Map<number, PDFPage>;
-  loadingPages: Set<number>;
-  errorPages: Set<number>;
-  totalPages: number;
-}
-
-const PRELOAD_DISTANCE = 3;
-const MAX_LOADED_PAGES = 20;
+import { useState, useEffect, useCallback } from 'react';
+import { usePDFLargeFileInfo } from './usePDFLargeFileInfo';
+import { usePDFLargePageLoader } from './usePDFLargePageLoader';
+import { usePDFLargeNavigation } from './usePDFLargeNavigation';
+import { 
+  LargePDFViewerState, 
+  PRELOAD_DISTANCE, 
+  MAX_LOADED_PAGES 
+} from './types/largePDFViewer';
 
 export const usePDFLargeLazyViewer = (pdfFileId: string) => {
   const [state, setState] = useState<LargePDFViewerState>({
@@ -39,106 +19,24 @@ export const usePDFLargeLazyViewer = (pdfFileId: string) => {
     totalPages: 0
   });
 
-  const [fileInfo, setFileInfo] = useState<PDFFileInfo | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
   console.log(`🚀 Large PDF Lazy Viewer initialized for: ${pdfFileId}`);
 
-  // Load file info and total pages count
-  const loadFileInfo = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
-      const { data, error: queryError } = await supabase
-        .from('pdf_files')
-        .select('id, title, num_pages_total, processing_status')
-        .eq('id', pdfFileId)
-        .single();
-
-      if (queryError) throw queryError;
-
-      const totalPages = data.num_pages_total || 0;
-      console.log(`📊 File info loaded: ${data.title}, ${totalPages} pages, status: ${data.processing_status}`);
-
-      // Map database fields to interface fields
-      const mappedFileInfo: PDFFileInfo = {
-        id: data.id,
-        title: data.title,
-        numPagesTotal: data.num_pages_total,
-        processingStatus: data.processing_status || 'pending'
-      };
-
-      setFileInfo(mappedFileInfo);
-      setState(prev => ({ ...prev, totalPages }));
-
-    } catch (err) {
-      console.error('❌ Failed to load file info:', err);
-      setError('שגיאה בטעינת מידע הקובץ');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [pdfFileId]);
-
-  // Load specific pages from database
-  const loadPagesFromDB = useCallback(async (pageNumbers: number[]): Promise<Map<number, PDFPage>> => {
-    if (pageNumbers.length === 0) return new Map();
-
-    // Cancel previous request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    abortControllerRef.current = new AbortController();
-
-    try {
-      console.log(`📄 Loading pages from DB: ${pageNumbers.join(', ')}`);
-
-      const { data, error: queryError } = await supabase
-        .from('pdf_pages')
-        .select('id, page_number, file_path, file_size')
-        .eq('pdf_file_id', pdfFileId)
-        .in('page_number', pageNumbers)
-        .order('page_number', { ascending: true });
-
-      if (queryError) throw queryError;
-
-      const pagesMap = new Map<number, PDFPage>();
-      (data || []).forEach(page => {
-        pagesMap.set(page.page_number, {
-          id: page.id,
-          pageNumber: page.page_number,
-          filePath: page.file_path,
-          fileSize: page.file_size || 0
-        });
-      });
-
-      console.log(`✅ Loaded ${pagesMap.size} pages from DB`);
-      return pagesMap;
-
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        console.log('📄 Page loading aborted');
-        return new Map();
-      }
-      console.error('❌ Failed to load pages:', err);
-      throw err;
-    }
-  }, [pdfFileId]);
+  // Use the smaller hooks
+  const { fileInfo, isLoading, error, loadFileInfo } = usePDFLargeFileInfo(pdfFileId);
+  const { loadPagesFromDB, getPageUrl, cleanup } = usePDFLargePageLoader(pdfFileId);
 
   // Get page URL for rendering
-  const getPageUrl = useCallback((pageNumber: number): string | null => {
+  const getPageUrlForNumber = useCallback((pageNumber: number): string | null => {
     const page = state.loadedPages.get(pageNumber);
     if (!page) {
       console.log(`❌ Page ${pageNumber} not found in loaded pages`);
       return null;
     }
 
-    const { data } = supabase.storage.from('pdf-files').getPublicUrl(page.filePath);
+    const url = getPageUrl(page);
     console.log(`🔗 Generated URL for page ${pageNumber}`);
-    return data.publicUrl;
-  }, [state.loadedPages]);
+    return url;
+  }, [state.loadedPages, getPageUrl]);
 
   // Update visible pages and load them
   const updateVisiblePages = useCallback(async (currentPage: number) => {
@@ -246,26 +144,21 @@ export const usePDFLargeLazyViewer = (pdfFileId: string) => {
     await updateVisiblePages(pageNumber);
   }, [state.totalPages, updateVisiblePages]);
 
-  const goToPrevPage = useCallback(() => {
-    if (state.currentPage > 1) {
-      goToPage(state.currentPage - 1);
-    }
-  }, [state.currentPage, goToPage]);
+  // Use navigation hook
+  const { goToPrevPage, goToNextPage, zoomIn, zoomOut } = usePDFLargeNavigation(
+    state.currentPage,
+    state.totalPages,
+    goToPage
+  );
 
-  const goToNextPage = useCallback(() => {
-    if (state.currentPage < state.totalPages) {
-      goToPage(state.currentPage + 1);
-    }
-  }, [state.currentPage, state.totalPages, goToPage]);
+  // Zoom function wrappers
+  const handleZoomIn = useCallback(() => {
+    zoomIn(state.scale, (updater) => setState(prev => ({ ...prev, scale: updater(prev.scale) })));
+  }, [state.scale, zoomIn]);
 
-  // Zoom functions
-  const zoomIn = useCallback(() => {
-    setState(prev => ({ ...prev, scale: Math.min(3.0, prev.scale + 0.2) }));
-  }, []);
-
-  const zoomOut = useCallback(() => {
-    setState(prev => ({ ...prev, scale: Math.max(0.5, prev.scale - 0.2) }));
-  }, []);
+  const handleZoomOut = useCallback(() => {
+    zoomOut(state.scale, (updater) => setState(prev => ({ ...prev, scale: updater(prev.scale) })));
+  }, [state.scale, zoomOut]);
 
   // Retry loading failed page
   const retryPage = useCallback(async (pageNumber: number) => {
@@ -279,24 +172,27 @@ export const usePDFLargeLazyViewer = (pdfFileId: string) => {
 
   // Initialize on mount
   useEffect(() => {
-    loadFileInfo();
+    const initializeViewer = async () => {
+      const { totalPages } = await loadFileInfo();
+      if (totalPages > 0) {
+        setState(prev => ({ ...prev, totalPages }));
+      }
+    };
+    
+    initializeViewer();
   }, [loadFileInfo]);
 
-  // Load initial pages when file info is ready
+  // Load initial pages when total pages is set
   useEffect(() => {
-    if (fileInfo && state.totalPages > 0) {
+    if (state.totalPages > 0) {
       updateVisiblePages(1);
     }
-  }, [fileInfo, state.totalPages, updateVisiblePages]);
+  }, [state.totalPages, updateVisiblePages]);
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+    return cleanup;
+  }, [cleanup]);
 
   return {
     // State
@@ -317,9 +213,9 @@ export const usePDFLargeLazyViewer = (pdfFileId: string) => {
     goToPage,
     goToPrevPage,
     goToNextPage,
-    zoomIn,
-    zoomOut,
-    getPageUrl,
+    zoomIn: handleZoomIn,
+    zoomOut: handleZoomOut,
+    getPageUrl: getPageUrlForNumber,
     retryPage,
     reload: loadFileInfo
   };
