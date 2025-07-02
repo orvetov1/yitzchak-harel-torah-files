@@ -146,7 +146,7 @@ const VirtualPDFPageRenderer = ({
                   <FileX size={48} className="mx-auto text-red-600" />
                   <div className="text-red-700 text-lg font-medium">קובץ מנוע ה-PDF פגום</div>
                   <div className="text-sm text-red-600">
-                    קובץ המנוע (pdf.worker.min.js) חסר או פגום. זה מונע מהמערכת לעבד קבצי PDF.
+                    קובץ המנוע (pdf.worker.mjs) חסר או פגום. זה מונע מהמערכת לעבד קבצי PDF.
                   </div>
                 </>
               ) : (
