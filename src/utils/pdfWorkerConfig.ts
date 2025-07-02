@@ -1,7 +1,7 @@
 
 import { pdfjs } from 'react-pdf';
 
-// Enhanced PDF worker configuration with ESM support for production
+// Enhanced PDF worker configuration with proper ESM support for production
 export class PDFWorkerManager {
   private static instance: PDFWorkerManager;
   private workerInitialized = false;
@@ -46,9 +46,9 @@ export class PDFWorkerManager {
 
     // Try different worker sources in order of preference
     const workerSources = [
-      // ESM worker entry (recommended for Vite)
+      // Try to use the ESM worker entry from pdfjs-dist
       () => this.configureESMWorker(),
-      // Local static file
+      // Local static file in public directory
       () => this.configureStaticWorker(`${window.location.origin}/pdf.worker.min.js`),
       // CDN fallbacks with version matching
       () => this.configureStaticWorker('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'),
@@ -83,22 +83,22 @@ export class PDFWorkerManager {
 
   private async configureESMWorker(): Promise<boolean> {
     try {
-      console.log('🔧 Configuring ESM worker entry...');
+      console.log('🔧 Configuring standard PDF.js worker...');
       
-      // Use the ESM worker entry which is recommended for modern bundlers
-      const workerEntry = await import('pdfjs-dist/build/pdf.worker.min.js?worker&url');
+      // Use the standard worker path that should be bundled with pdfjs-dist
+      // This avoids the problematic ?worker&url syntax
+      const workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.js',
+        import.meta.url
+      ).toString();
       
-      if (workerEntry.default) {
-        pdfjs.GlobalWorkerOptions.workerSrc = workerEntry.default;
-        this.diagnostics.workerSource = 'ESM Worker Entry';
-        console.log('✅ ESM worker configured successfully');
-        
-        return await this.testWorker();
-      } else {
-        throw new Error('ESM worker entry not available');
-      }
+      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+      this.diagnostics.workerSource = 'ESM Standard Worker';
+      console.log('✅ Standard PDF.js worker configured');
+      
+      return await this.testWorker();
     } catch (error) {
-      console.warn('❌ ESM worker configuration failed:', error);
+      console.warn('❌ Standard worker configuration failed:', error);
       throw error;
     }
   }

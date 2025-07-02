@@ -24,23 +24,17 @@ export default defineConfig(({ mode }) => ({
   optimizeDeps: {
     include: [
       'pdfjs-dist',
-      'pdfjs-dist/build/pdf.worker.min.js'
+      'react-pdf'
     ]
   },
   build: {
     rollupOptions: {
       output: {
         manualChunks: {
-          'pdfjs': ['pdfjs-dist'],
-          'pdfjs-worker': ['pdfjs-dist/build/pdf.worker.min.js']
+          'pdfjs': ['pdfjs-dist', 'react-pdf']
         }
       }
     }
-  },
-  // Enhanced worker support
-  worker: {
-    format: 'es',
-    plugins: () => [react()]
   },
   // Define globals to prevent build issues
   define: {
