@@ -29,14 +29,13 @@ const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRenderer
           console.error(`❌ Optimized PDF document load error for page ${pageNumber}:`, {
             error: error.message,
             name: error.name,
-            url: pageUrl,
-            stack: error.stack
+            url: pageUrl
           });
         }}
         loading={
           <div className="flex items-center justify-center h-96">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mr-2"></div>
-            <span className="hebrew-text">טוען מסמך...</span>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <span className="mr-2 hebrew-text">טוען מסמך...</span>
           </div>
         }
         error={
@@ -55,8 +54,8 @@ const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRenderer
           renderAnnotationLayer={false}
           loading={
             <div className="flex items-center justify-center h-96">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mr-2"></div>
-              <span className="hebrew-text">טוען עמוד...</span>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              <span className="mr-2 hebrew-text">טוען עמוד...</span>
             </div>
           }
           error={
@@ -74,8 +73,7 @@ const PDFDocumentRenderer = ({ pageNumber, pageUrl, scale }: PDFDocumentRenderer
             console.error(`❌ Optimized page ${pageNumber} render error:`, {
               error: error.message,
               name: error.name,
-              pageNumber,
-              stack: error.stack
+              pageNumber
             });
           }}
         />
