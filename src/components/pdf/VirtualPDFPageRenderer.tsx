@@ -33,13 +33,12 @@ const VirtualPDFPageRenderer = ({
     return /\.(png|jpg|jpeg|gif|webp)(\?|$)/i.test(url);
   };
 
-  // Get enhanced worker status
+  // Get worker status
   const workerManager = PDFWorkerManager.getInstance();
   const isWorkerAvailable = isPDFWorkerReady();
-  const isFallbackMode = workerManager.isFallbackMode();
   const workerStatus = getPDFWorkerStatus();
 
-  // Enhanced render mode logic with better fallbacks
+  // Simplified render mode logic
   const getRenderMode = (url: string | null) => {
     if (!url) {
       console.log(`📄 Page ${pageNumber}: No URL available, using fallback mode`);
@@ -52,20 +51,20 @@ const VirtualPDFPageRenderer = ({
       return 'image';
     }
     
-    // For PDF files, check enhanced worker availability
-    if (!isWorkerAvailable || isFallbackMode) {
-      console.log(`📄 Page ${pageNumber}: Enhanced PDF Worker not available (${workerStatus}), using Image Renderer as fallback`);
+    // For PDF files, check worker availability
+    if (!isWorkerAvailable) {
+      console.log(`📄 Page ${pageNumber}: PDF Worker not available (${workerStatus}), using Image Renderer as fallback`);
       return 'image'; // Try image renderer as fallback for PDFs too
     }
     
-    console.log(`📄 Page ${pageNumber}: Enhanced PDF Worker available (${workerStatus}), using PDF Document Renderer`);
+    console.log(`📄 Page ${pageNumber}: PDF Worker available (${workerStatus}), using PDF Document Renderer`);
     return 'pdf';
   };
 
   const renderMode = getRenderMode(pageUrl);
 
   // Enhanced logging for debugging
-  console.log(`🔍 Enhanced VirtualPDFPageRenderer - Page ${pageNumber}:`, {
+  console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
     pageUrl: pageUrl ? `Available (${pageUrl.substring(0, 50)}...)` : 'null',
     renderMode,
     isCurrentPage,
@@ -73,7 +72,6 @@ const VirtualPDFPageRenderer = ({
     workerStatus,
     workerDiagnostics: {
       initialized: isWorkerAvailable,
-      fallbackMode: isFallbackMode,
       errors: workerManager.getDiagnostics().errors.slice(-2)
     }
   });
@@ -123,7 +121,7 @@ const VirtualPDFPageRenderer = ({
                       <div className="text-muted-foreground text-lg">עמוד {pageNumber} לא זמין</div>
                       <div className="text-xs text-muted-foreground bg-yellow-50 p-3 rounded border">
                         <div className="font-medium mb-1">מידע טכני:</div>
-                        <div>מצב Enhanced Worker: {workerStatus}</div>
+                        <div>מצב Worker: {workerStatus}</div>
                         {workerManager.getDiagnostics().errors.length > 0 && (
                           <div className="mt-2 text-red-600">
                             שגיאה אחרונה: {workerManager.getDiagnostics().errors.slice(-1)[0]}
