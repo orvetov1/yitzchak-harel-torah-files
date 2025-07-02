@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -12,6 +13,7 @@ interface LinearizationState {
   linearizedSize?: number;
   optimizedSize?: number;
   isLinearized?: boolean;
+  fallbackUsed?: boolean;
 }
 
 export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
@@ -45,7 +47,7 @@ export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
         ...prev,
         hasLinearizedVersion: hasLinearized,
         linearizedUrl: hasLinearized ? data.optimized_file_path : null,
-        isLinearizing: data.processing_status === 'linearizing',
+        isLinearizing: data.processing_status === 'linearizing' || data.processing_status === 'optimizing',
         compressionRatio: data.compression_ratio || undefined,
         originalSize: data.original_size || undefined,
         linearizedSize: data.optimized_size || undefined,
@@ -56,7 +58,7 @@ export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
 
       console.log('🔍 Linearization status check:', {
         hasLinearized,
-        isLinearizing: data.processing_status === 'linearizing',
+        isLinearizing: data.processing_status === 'linearizing' || data.processing_status === 'optimizing',
         compressionRatio: data.compression_ratio,
         isLinearized: data.processing_status === 'linearized'
       });
@@ -96,7 +98,7 @@ export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
 
       console.log('🚀 Requesting PDF linearization for:', pdfFileId);
 
-      const { error: functionError } = await supabase.functions.invoke('linearize-pdf', {
+      const { data: functionResult, error: functionError } = await supabase.functions.invoke('linearize-pdf', {
         body: {
           pdf_file_id: pdfFileId,
           file_path: relativePath,
@@ -106,6 +108,12 @@ export const usePDFLinearization = (fileUrl: string, pdfFileId?: string) => {
 
       if (functionError) {
         throw functionError;
+      }
+
+      // Log if fallback was used
+      if (functionResult?.fallback_used) {
+        console.log('⚠️ Linearization used optimization fallback (Ghostscript not available)');
+        setState(prev => ({ ...prev, fallbackUsed: true }));
       }
 
       // Check status after a delay
