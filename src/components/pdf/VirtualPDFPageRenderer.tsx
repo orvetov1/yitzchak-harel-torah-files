@@ -1,6 +1,8 @@
 
 import React from 'react';
+import { Document, Page } from 'react-pdf';
 import { Button } from '../ui/button';
+import '../../utils/pdfWorkerLoader'; // Ensure worker is loaded
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -22,25 +24,79 @@ const VirtualPDFPageRenderer = ({
   onLoadPage
 }: VirtualPDFPageRendererProps) => {
   const renderPDFPage = (pageNumber: number, pageUrl: string) => {
-    console.log(`🔍 Rendering page ${pageNumber} directly with image/embed`);
+    console.log(`🔍 Rendering PDF page ${pageNumber} with react-pdf`);
     
     return (
       <div 
         className="bg-white shadow-lg flex items-center justify-center min-h-[800px]"
         style={{ transform: `scale(${scale})`, transformOrigin: 'top center' }}
       >
-        <img
-          src={pageUrl}
-          alt={`עמוד ${pageNumber}`}
-          className="max-w-full h-auto"
-          onLoad={() => {
-            console.log(`✅ Page ${pageNumber} image loaded successfully`);
+        <Document
+          file={pageUrl}
+          onLoadSuccess={(pdf) => {
+            console.log(`✅ PDF document loaded for page ${pageNumber}, total pages: ${pdf.numPages}`);
           }}
-          onError={(error) => {
-            console.error(`❌ Page ${pageNumber} image load error:`, error);
+          onLoadError={(error) => {
+            console.error(`❌ PDF document load error for page ${pageNumber}:`, error);
           }}
-          style={{ maxHeight: '90vh' }}
-        />
+          loading={
+            <div className="flex items-center justify-center h-96 hebrew-text">
+              <div className="text-center space-y-2">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <div>טוען מסמך PDF...</div>
+              </div>
+            </div>
+          }
+          error={
+            <div className="flex items-center justify-center h-96 hebrew-text">
+              <div className="text-center space-y-2 text-red-600">
+                <div>שגיאה בטעינת המסמך</div>
+                <Button
+                  variant="outline"
+                  onClick={() => onLoadPage(pageNumber)}
+                  className="hebrew-text"
+                >
+                  נסה שוב
+                </Button>
+              </div>
+            </div>
+          }
+        >
+          <Page
+            pageNumber={1} // Always render the first page since we're dealing with single-page documents
+            scale={scale}
+            renderTextLayer={false}
+            renderAnnotationLayer={false}
+            loading={
+              <div className="flex items-center justify-center h-96 hebrew-text">
+                <div className="text-center space-y-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                  <div>מעבד עמוד {pageNumber}...</div>
+                </div>
+              </div>
+            }
+            error={
+              <div className="flex items-center justify-center h-96 hebrew-text">
+                <div className="text-center space-y-2 text-red-600">
+                  <div>שגיאה בהצגת עמוד {pageNumber}</div>
+                  <Button
+                    variant="outline"
+                    onClick={() => onLoadPage(pageNumber)}
+                    className="hebrew-text"
+                  >
+                    טען שוב
+                  </Button>
+                </div>
+              </div>
+            }
+            onLoadSuccess={() => {
+              console.log(`✅ Page ${pageNumber} rendered successfully`);
+            }}
+            onLoadError={(error) => {
+              console.error(`❌ Page ${pageNumber} render error:`, error);
+            }}
+          />
+        </Document>
       </div>
     );
   };
