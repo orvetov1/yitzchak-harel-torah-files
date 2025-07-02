@@ -45,7 +45,7 @@ export class PDFWorkerManager {
     console.log(`🚀 Initializing PDF Worker (attempt ${this.diagnostics.attempts})`);
 
     // Use only the local worker file
-    const localWorkerUrl = `${window.location.origin}/pdf.worker.min.js`;
+    const localWorkerUrl = `${window.location.origin}/pdf.worker.mjs`;
     
     try {
       console.log(`🔧 Using local PDF worker: ${localWorkerUrl}`);
