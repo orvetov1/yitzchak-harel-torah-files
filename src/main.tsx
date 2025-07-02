@@ -1,16 +1,27 @@
 
-import { pdfjs } from 'react-pdf';
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
+
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
-
+import { pdfjs } from 'react-pdf';
+pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.mjs';
 import App from './App.tsx';
 import './index.css';
 
 import './utils/pdfWorkerLoader'; // Initialize optimized PDF worker
+
+const initializePDF = async () => {
+  try {
+    await import('./utils/pdfWorkerLoader').then(({ initWorker }) => initWorker());
+    console.log('PDF Worker initialized successfully');
+  } catch (error) {
+    console.error('Failed to initialize PDF Worker:', error);
+  }
+};
+
+initializePDF();
 
 // Enhanced QueryClient configuration for PDF handling
 const queryClient = new QueryClient({
