@@ -1,29 +1,43 @@
 
-// Simplified PDF worker loader using only local file
+// Lazy PDF worker loader - only initializes when needed
 import PDFWorkerManager, { initializePDFWorker } from './pdfWorkerConfig';
 
 let initializationPromise: Promise<boolean> | null = null;
+let isInitialized = false;
+let hasFailed = false;
 
-// Initialize worker with the local file only
+// Initialize worker only when explicitly requested
 const initWorker = async (): Promise<boolean> => {
+  if (hasFailed) {
+    console.log('🚫 PDF Worker previously failed, not retrying');
+    return false;
+  }
+
+  if (isInitialized) {
+    console.log('✅ PDF Worker already initialized');
+    return true;
+  }
+
   if (initializationPromise) {
     console.log('🔄 PDF Worker initialization already in progress...');
     return initializationPromise;
   }
 
-  console.log('🚀 Starting PDF worker initialization with local file...');
+  console.log('🚀 Starting PDF worker initialization (on-demand)...');
   
-  initializationPromise = initializePDFWorker(1); // Only 1 attempt needed
+  initializationPromise = initializePDFWorker(1);
   
   try {
     const success = await initializationPromise;
     
     if (success) {
-      console.log('✅ PDF worker initialized successfully from local file');
+      console.log('✅ PDF worker initialized successfully');
+      isInitialized = true;
       const manager = PDFWorkerManager.getInstance();
       console.log('📊 Worker Status:', manager.getWorkerStatus());
     } else {
-      console.error('❌ PDF worker initialization failed - local file not available');
+      console.error('❌ PDF worker initialization failed');
+      hasFailed = true;
       const manager = PDFWorkerManager.getInstance();
       console.log('🔍 Diagnostics:', manager.getDiagnostics());
     }
@@ -32,6 +46,7 @@ const initWorker = async (): Promise<boolean> => {
   } catch (error) {
     console.error('💥 PDF Worker initialization error:', error);
     initializationPromise = null;
+    hasFailed = true;
     return false;
   }
 };
@@ -43,19 +58,35 @@ export const getPDFWorkerDiagnostics = () => {
 };
 
 export const isPDFWorkerReady = () => {
-  const manager = PDFWorkerManager.getInstance();
-  return manager.isInitialized();
+  return isInitialized && !hasFailed;
 };
 
 export const getPDFWorkerStatus = () => {
-  const manager = PDFWorkerManager.getInstance();
-  return manager.getWorkerStatus();
+  if (hasFailed) return '❌ נכשל';
+  if (isInitialized) return '✅ פעיל';
+  return '⏳ לא מאותחל';
+};
+
+export const initializePDFWorkerIfNeeded = async (): Promise<boolean> => {
+  if (isPDFWorkerReady()) {
+    return true;
+  }
+  
+  if (hasFailed) {
+    console.log('🚫 PDF Worker failed previously, not retrying automatically');
+    return false;
+  }
+  
+  console.log('🎯 Initializing PDF Worker on demand...');
+  return await initWorker();
 };
 
 export const resetPDFWorker = async (): Promise<boolean> => {
   console.log('🔄 Resetting PDF Worker...');
   const manager = PDFWorkerManager.getInstance();
   initializationPromise = null;
+  isInitialized = false;
+  hasFailed = false;
   manager.reset();
   return await initWorker();
 };
@@ -70,6 +101,11 @@ export const waitForPDFWorker = async (timeoutMs = 10000): Promise<boolean> => {
       return true;
     }
     
+    if (hasFailed) {
+      console.log('❌ PDF Worker failed, stopping wait');
+      return false;
+    }
+    
     if (!initializationPromise) {
       initWorker();
     }
@@ -81,14 +117,12 @@ export const waitForPDFWorker = async (timeoutMs = 10000): Promise<boolean> => {
   return false;
 };
 
-// Initialize immediately on module load
-initWorker().catch(error => {
-  console.error('Failed to initialize PDF worker on module load:', error);
-});
-
-// Legacy exports for compatibility
+// Legacy exports for compatibility - but don't auto-initialize
 export const configurePDFWorker = initializePDFWorker;
 export const testPDFWorker = async () => {
   const manager = PDFWorkerManager.getInstance();
   return manager.isInitialized();
 };
+
+// DON'T initialize on module load - only when needed
+console.log('📄 PDF Worker Loader loaded (lazy mode)');

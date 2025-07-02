@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { RefreshCw, Image, FileText, AlertTriangle, Settings } from 'lucide-react';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
-import { getPDFWorkerStatus, resetPDFWorker, isPDFWorkerReady } from '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus, resetPDFWorker, isPDFWorkerReady, initializePDFWorkerIfNeeded } from '../../utils/pdfWorkerLoader';
 
 interface PDFProgressiveLoaderProps {
   pageNumber: number;
@@ -26,11 +26,32 @@ const PDFProgressiveLoader = ({
   const [lastError, setLastError] = useState<string | null>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [isResettingWorker, setIsResettingWorker] = useState(false);
+  const [isInitializingWorker, setIsInitializingWorker] = useState(false);
 
   const handleRetry = () => {
     setLoadAttempts(prev => prev + 1);
     setLastError(null);
     onRetry();
+  };
+
+  const handleInitializeWorker = async () => {
+    setIsInitializingWorker(true);
+    try {
+      console.log('🔄 Initializing PDF Worker from user action...');
+      const success = await initializePDFWorkerIfNeeded();
+      if (success) {
+        setLoadAttempts(0);
+        setLastError(null);
+        onRetry();
+      } else {
+        setLastError('Failed to initialize PDF Worker');
+      }
+    } catch (error) {
+      console.error('Failed to initialize PDF Worker:', error);
+      setLastError('Failed to initialize PDF Worker');
+    } finally {
+      setIsInitializingWorker(false);
+    }
   };
 
   const handleResetWorker = async () => {
@@ -105,7 +126,7 @@ const PDFProgressiveLoader = ({
           </div>
           
           <div className="space-y-2">
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-2 justify-center flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -117,7 +138,20 @@ const PDFProgressiveLoader = ({
                 {loadAttempts >= 5 ? 'מקסימום נסיונות' : 'נסה שוב'}
               </Button>
               
-              {loadAttempts >= 2 && !isWorkerReady && (
+              {!isWorkerReady && renderMode === 'pdf' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleInitializeWorker}
+                  disabled={isInitializingWorker}
+                  className="hebrew-text"
+                >
+                  <Settings size={16} className="ml-2" />
+                  {isInitializingWorker ? 'מאתחל...' : 'אתחל Worker'}
+                </Button>
+              )}
+              
+              {loadAttempts >= 2 && isWorkerReady && (
                 <Button
                   variant="outline"
                   size="sm"

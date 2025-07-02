@@ -6,7 +6,7 @@ import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
-import { getPDFWorkerStatus, isPDFWorkerReady } from '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus, isPDFWorkerReady, initializePDFWorkerIfNeeded } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -38,8 +38,8 @@ const VirtualPDFPageRenderer = ({
   const isWorkerAvailable = isPDFWorkerReady();
   const workerStatus = getPDFWorkerStatus();
 
-  // Simplified render mode logic
-  const getRenderMode = (url: string | null) => {
+  // Enhanced render mode logic with lazy worker initialization
+  const getRenderMode = async (url: string | null) => {
     if (!url) {
       console.log(`📄 Page ${pageNumber}: No URL available, using fallback mode`);
       return 'fallback';
@@ -51,22 +51,34 @@ const VirtualPDFPageRenderer = ({
       return 'image';
     }
     
-    // For PDF files, check worker availability
+    // For PDF files, initialize worker if needed
     if (!isWorkerAvailable) {
-      console.log(`📄 Page ${pageNumber}: PDF Worker not available (${workerStatus}), using Image Renderer as fallback`);
-      return 'image'; // Try image renderer as fallback for PDFs too
+      console.log(`📄 Page ${pageNumber}: PDF Worker not ready, attempting initialization...`);
+      const initialized = await initializePDFWorkerIfNeeded();
+      
+      if (!initialized) {
+        console.log(`📄 Page ${pageNumber}: PDF Worker initialization failed, using Image Renderer as fallback`);
+        return 'image';
+      }
     }
     
-    console.log(`📄 Page ${pageNumber}: PDF Worker available (${workerStatus}), using PDF Document Renderer`);
+    console.log(`📄 Page ${pageNumber}: PDF Worker ready, using PDF Document Renderer`);
     return 'pdf';
   };
 
-  const renderMode = getRenderMode(pageUrl);
+  // Use synchronous render mode determination for initial render
+  const getInitialRenderMode = (url: string | null) => {
+    if (!url) return 'fallback';
+    if (isImageFile(url)) return 'image';
+    return isWorkerAvailable ? 'pdf' : 'image';
+  };
+
+  const initialRenderMode = getInitialRenderMode(pageUrl);
 
   // Enhanced logging for debugging
   console.log(`🔍 VirtualPDFPageRenderer - Page ${pageNumber}:`, {
     pageUrl: pageUrl ? `Available (${pageUrl.substring(0, 50)}...)` : 'null',
-    renderMode,
+    initialRenderMode,
     isCurrentPage,
     isPageLoading,
     workerStatus,
@@ -99,17 +111,17 @@ const VirtualPDFPageRenderer = ({
             pageUrl={pageUrl}
             isLoading={isPageLoading}
             onRetry={() => onLoadPage(pageNumber)}
-            renderMode={renderMode}
+            renderMode={initialRenderMode}
           >
             {pageUrl && !isPageLoading && (
               <>
-                {renderMode === 'image' ? (
+                {initialRenderMode === 'image' ? (
                   <PDFImageRenderer
                     pageNumber={pageNumber}
                     pageUrl={pageUrl}
                     scale={scale}
                   />
-                ) : renderMode === 'pdf' ? (
+                ) : initialRenderMode === 'pdf' ? (
                   <PDFDocumentRenderer
                     pageNumber={pageNumber}
                     pageUrl={pageUrl}
