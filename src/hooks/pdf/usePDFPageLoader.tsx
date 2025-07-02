@@ -43,7 +43,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         loadingPages: new Set([...prev.loadingPages, pageNumber])
       }));
 
-      // First, try to get from split pages (these are usually images)
+      // First, try to get from split pages
       const { data: pageData, error: pageError } = await supabase
         .from('pdf_pages')
         .select('file_path')
@@ -57,7 +57,7 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         console.log(`📄 Loading split page ${pageNumber} from:`, pageData.file_path);
         
         // Check if it's an image file (PNG/JPG)
-        const isImageFile = pageData.file_path.match(/\.(png|jpg|jpeg)$/i);
+        const isImageFile = pageData.file_path.match(/\.(png|jpg|jpeg|gif|webp)$/i);
         
         if (isImageFile) {
           console.log(`🖼️ Split page ${pageNumber} is an image file`);
@@ -67,21 +67,28 @@ export const usePDFPageLoader = (pdfFileId: string) => {
             .getPublicUrl(pageData.file_path);
           
           blobUrl = data.publicUrl;
+          console.log(`✅ Image URL for page ${pageNumber}: ${blobUrl}`);
+          
         } else {
           console.log(`📄 Split page ${pageNumber} is a PDF file`);
           // Download PDF file and create blob URL
-          const { data: fileData, error: downloadError } = await supabase.storage
-            .from('pdf-files')
-            .download(pageData.file_path);
+          try {
+            const { data: fileData, error: downloadError } = await supabase.storage
+              .from('pdf-files')
+              .download(pageData.file_path);
 
-          if (downloadError || !fileData) {
-            throw new Error(`Failed to download page ${pageNumber}: ${downloadError?.message}`);
+            if (downloadError || !fileData) {
+              throw new Error(`Failed to download page ${pageNumber}: ${downloadError?.message}`);
+            }
+
+            blobUrl = URL.createObjectURL(fileData);
+            console.log(`✅ PDF blob URL for page ${pageNumber}: ${blobUrl}`);
+            
+          } catch (downloadError) {
+            console.error(`❌ PDF download failed for page ${pageNumber}:`, downloadError);
+            throw downloadError;
           }
-
-          blobUrl = URL.createObjectURL(fileData);
         }
-        
-        console.log(`✅ Split page ${pageNumber} loaded successfully: ${blobUrl}`);
         
       } else {
         console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
@@ -97,17 +104,23 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           throw new Error('PDF file not found');
         }
 
-        // Download main PDF and create blob URL
-        const { data: fileData, error: downloadError } = await supabase.storage
-          .from('pdf-files')
-          .download(pdfFile.file_path);
+        try {
+          // Download main PDF and create blob URL
+          const { data: fileData, error: downloadError } = await supabase.storage
+            .from('pdf-files')
+            .download(pdfFile.file_path);
 
-        if (downloadError || !fileData) {
-          throw new Error(`Failed to download main PDF: ${downloadError?.message}`);
+          if (downloadError || !fileData) {
+            throw new Error(`Failed to download main PDF: ${downloadError?.message}`);
+          }
+
+          blobUrl = URL.createObjectURL(fileData);
+          console.log(`✅ Main PDF blob URL for page ${pageNumber}: ${blobUrl}`);
+          
+        } catch (downloadError) {
+          console.error(`❌ Main PDF download failed:`, downloadError);
+          throw downloadError;
         }
-
-        blobUrl = URL.createObjectURL(fileData);
-        console.log(`✅ Main PDF blob URL for page ${pageNumber}: ${blobUrl}`);
       }
 
       // Cache the result using both cacheRef and setPageUrl
@@ -136,9 +149,11 @@ export const usePDFPageLoader = (pdfFileId: string) => {
 
     } catch (error) {
       console.error(`❌ Failed to load page ${pageNumber}:`, error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
       setState(prev => ({
         ...prev,
-        error: `Failed to load page ${pageNumber}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        error: `Failed to load page ${pageNumber}: ${errorMessage}`,
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
       }));
       return null;
@@ -149,6 +164,8 @@ export const usePDFPageLoader = (pdfFileId: string) => {
     // Abort all ongoing requests
     abortControllersRef.current.forEach(controller => controller.abort());
     abortControllersRef.current.clear();
+    
+    console.log(`🧹 usePDFPageLoader cleanup completed`);
   }, []);
 
   return {
