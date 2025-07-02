@@ -1,7 +1,6 @@
-
+// src/utils/pdfWorkerConfig.ts
 import { pdfjs } from 'react-pdf';
 
-// Enhanced PDF worker configuration with static path for production reliability
 export class PDFWorkerManager {
   private static instance: PDFWorkerManager;
   private workerInitialized = false;
@@ -44,30 +43,43 @@ export class PDFWorkerManager {
 
     console.log(`🚀 Initializing PDF Worker (attempt ${this.diagnostics.attempts})`);
 
-    // Try different worker sources in order of preference
-    const workerSources = [
-      // Local static file in public directory (most reliable)
-      () => this.configureStaticWorker(`${window.location.origin}/pdf.worker.min.js`),
-      // CDN fallbacks with version matching
-      () => this.configureStaticWorker('https://cdn.jsdelivr.net/npm/pdfjs-dist@4.4.168/build/pdf.worker.min.js'),
-      () => this.configureStaticWorker('https://unpkg.com/pdfjs-dist@4.4.168/build/pdf.worker.min.js')
+    // Prioritize local static file
+    const localWorkerUrl = `${window.location.origin}/pdf.worker.min.js`;
+
+    // CDN fallbacks with version matching the installed pdfjs-dist
+    const cdnWorkerUrls = [
+      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
+      `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`
     ];
 
-    for (let i = 0; i < workerSources.length; i++) {
-      console.log(`🔧 Trying PDF worker configuration ${i + 1}/${workerSources.length}`);
+    const workerSourcesToTry = [localWorkerUrl, ...cdnWorkerUrls];
+
+    for (let i = 0; i < workerSourcesToTry.length; i++) {
+      const workerSrc = workerSourcesToTry[i];
+      console.log(`🔧 Trying PDF worker configuration ${i + 1}/${workerSourcesToTry.length}: ${workerSrc}`);
       
       try {
-        const success = await workerSources[i]();
+        const isAvailable = await this.testWorkerSource(workerSrc);
+        if (!isAvailable) {
+          throw new Error('Worker source not available or not accessible');
+        }
+
+        pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
+        this.diagnostics.workerSource = workerSrc;
+        
+        const success = await this.testWorker();
         if (success) {
           this.workerInitialized = true;
           this.diagnostics.initialized = true;
           
           const elapsedTime = Date.now() - startTime;
-          console.log(`✅ PDF Worker initialized successfully in ${elapsedTime}ms`);
+          console.log(`✅ PDF Worker initialized successfully in ${elapsedTime}ms from ${workerSrc}`);
           return true;
+        } else {
+          throw new Error('Worker functionality test failed after setting workerSrc');
         }
       } catch (error) {
-        const errorMsg = `Configuration ${i + 1} failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        const errorMsg = `Configuration ${i + 1} (${workerSrc}) failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
         console.warn(`⚠️ ${errorMsg}`);
         this.diagnostics.errors.push(errorMsg);
       }
@@ -79,67 +91,34 @@ export class PDFWorkerManager {
     return false;
   }
 
-  private async configureStaticWorker(workerSrc: string): Promise<boolean> {
-    try {
-      console.log(`🔧 Configuring static worker: ${workerSrc}`);
-      
-      // Test if worker source is available with enhanced checking
-      const isAvailable = await this.testWorkerSource(workerSrc);
-      if (!isAvailable) {
-        throw new Error('Worker source not available or not accessible');
-      }
-
-      pdfjs.GlobalWorkerOptions.workerSrc = workerSrc;
-      this.diagnostics.workerSource = workerSrc;
-      
-      const success = await this.testWorker();
-      if (success) {
-        console.log(`✅ Static worker configured successfully: ${workerSrc}`);
-        return true;
-      } else {
-        throw new Error('Worker functionality test failed');
-      }
-    } catch (error) {
-      console.warn(`❌ Static worker configuration failed for ${workerSrc}:`, error);
-      throw error;
-    }
-  }
-
   private async testWorkerSource(workerSrc: string): Promise<boolean> {
     try {
       console.log(`🧪 Testing worker source availability: ${workerSrc}`);
       
-      if (workerSrc.startsWith('http')) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased timeout
-        
-        const response = await fetch(workerSrc, { 
-          method: 'HEAD',
-          signal: controller.signal,
-          mode: 'cors',
-          cache: 'no-cache'
-        });
-        
-        clearTimeout(timeoutId);
-        const available = response.ok && response.status === 200;
-        console.log(`📊 Worker source test result: ${available ? 'AVAILABLE' : 'NOT AVAILABLE'} (status: ${response.status})`);
-        return available;
-      } else {
-        // For local paths, assume available but log
-        console.log('📍 Local worker path - assuming available');
-        return true;
-      }
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 7000); // Increased timeout to 7 seconds
+      
+      const response = await fetch(workerSrc, { 
+        method: 'HEAD',
+        signal: controller.signal,
+        mode: 'cors', // Ensure CORS is handled
+        cache: 'no-store' // Prevent caching issues during testing
+      });
+      
+      clearTimeout(timeoutId);
+      const available = response.ok && response.status === 200;
+      console.log(`📊 Worker source test result for ${workerSrc}: ${available ? 'AVAILABLE' : 'NOT AVAILABLE'} (status: ${response.status})`);
+      return available;
     } catch (error) {
       console.warn(`❌ Worker source availability test failed for ${workerSrc}:`, error);
       return false;
     }
   }
 
-  private async testWorker(timeoutMs = 8000): Promise<boolean> {
+  private async testWorker(timeoutMs = 10000): Promise<boolean> { // Increased functionality test timeout to 10 seconds
     try {
       console.log('🧪 Testing PDF Worker functionality...');
       
-      // Create minimal test PDF data (valid PDF header)
       const testPdfData = new Uint8Array([
         0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, // %PDF-1.4
         0x0a, 0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a        // %%EOF
@@ -162,7 +141,7 @@ export class PDFWorkerManager {
         console.log('✅ PDF Worker functionality test PASSED');
         return true;
       } else {
-        throw new Error('Invalid PDF document returned from worker test');
+        throw new Error('Invalid PDF document returned from worker test or unexpected worker behavior');
       }
     } catch (error) {
       console.warn(`❌ PDF Worker functionality test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -194,7 +173,13 @@ export class PDFWorkerManager {
 
   getWorkerStatus(): string {
     if (this.workerInitialized) {
-      return `✅ פעיל (${this.diagnostics.workerSource.includes('pdf.worker.min.js') ? 'מקומי' : 'CDN'})`;
+      const source = this.diagnostics.workerSource;
+      if (source.includes('pdf.worker.min.js') && source.startsWith(window.location.origin)) {
+        return '✅ פעיל (מקומי)';
+      } else if (source.includes('cdn.jsdelivr.net') || source.includes('unpkg.com')) {
+        return '✅ פעיל (CDN)';
+      }
+      return `✅ פעיל (${source.substring(0, 20)}...)`;
     } else if (this.diagnostics.fallbackMode) {
       return '⚠️ מצב חלופי - פונקציונליות מוגבלת';
     } else {
@@ -212,13 +197,11 @@ export class PDFWorkerManager {
       fallbackMode: false,
       attempts: 0
     };
-    // Clear any existing worker configuration
     pdfjs.GlobalWorkerOptions.workerSrc = '';
     console.log('🔄 PDF Worker Manager reset completed');
   }
 }
 
-// Initialize worker with enhanced error handling and retries
 export const initializePDFWorker = async (retries = 2): Promise<boolean> => {
   const manager = PDFWorkerManager.getInstance();
   
@@ -231,8 +214,8 @@ export const initializePDFWorker = async (retries = 2): Promise<boolean> => {
     }
     
     if (attempt <= retries) {
-      console.log(`⏳ Retrying PDF Worker initialization in 1 second...`);
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      console.log(`⏳ Retrying PDF Worker initialization in 2 seconds...`); // Increased retry delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
     }
   }
   
