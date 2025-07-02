@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { pdfjs } from 'react-pdf';
+import type { PDFDocumentProxy } from 'pdfjs-dist';
 import App from './App.tsx';
 import './index.css';
 
@@ -41,11 +42,11 @@ const testWorkerAvailability = async () => {
       verbosity: 1
     }).promise;
     
-    const timeoutPromise = new Promise((_, reject) => {
+    const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('Worker test timeout')), 3000);
     });
 
-    const pdfDoc = await Promise.race([testPromise, timeoutPromise]);
+    const pdfDoc = await Promise.race([testPromise, timeoutPromise]) as PDFDocumentProxy;
     
     if (pdfDoc && typeof pdfDoc.numPages === 'number') {
       console.log('✅ PDF Worker is working correctly!');
