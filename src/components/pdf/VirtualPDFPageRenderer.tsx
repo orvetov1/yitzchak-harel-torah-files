@@ -5,7 +5,6 @@ import PDFProgressiveLoader from './PDFProgressiveLoader';
 import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
-import PDFWorkerManager from '../../utils/pdfWorkerConfig';
 import { getPDFWorkerStatus, isPDFWorkerReady, initializePDFWorkerIfNeeded } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
@@ -34,7 +33,6 @@ const VirtualPDFPageRenderer = ({
   };
 
   // Get worker status
-  const workerManager = PDFWorkerManager.getInstance();
   const isWorkerAvailable = isPDFWorkerReady();
   const workerStatus = getPDFWorkerStatus();
 
@@ -81,11 +79,7 @@ const VirtualPDFPageRenderer = ({
     initialRenderMode,
     isCurrentPage,
     isPageLoading,
-    workerStatus,
-    workerDiagnostics: {
-      initialized: isWorkerAvailable,
-      errors: workerManager.getDiagnostics().errors.slice(-2)
-    }
+    workerStatus
   });
 
   return (
@@ -113,7 +107,7 @@ const VirtualPDFPageRenderer = ({
             onRetry={() => onLoadPage(pageNumber)}
             renderMode={initialRenderMode}
           >
-            {pageUrl && !isPageLoading && (
+            {pageUrl && !isPageLoading ? (
               <>
                 {initialRenderMode === 'image' ? (
                   <PDFImageRenderer
@@ -134,11 +128,6 @@ const VirtualPDFPageRenderer = ({
                       <div className="text-xs text-muted-foreground bg-yellow-50 p-3 rounded border">
                         <div className="font-medium mb-1">מידע טכני:</div>
                         <div>מצב Worker: {workerStatus}</div>
-                        {workerManager.getDiagnostics().errors.length > 0 && (
-                          <div className="mt-2 text-red-600">
-                            שגיאה אחרונה: {workerManager.getDiagnostics().errors.slice(-1)[0]}
-                          </div>
-                        )}
                       </div>
                       <button
                         onClick={() => onLoadPage(pageNumber)}
@@ -150,6 +139,30 @@ const VirtualPDFPageRenderer = ({
                   </div>
                 )}
               </>
+            ) : (
+              <div className="flex items-center justify-center h-96 hebrew-text bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="text-center space-y-4 max-w-md p-6">
+                  {!pageUrl ? (
+                    <>
+                      <div className="text-muted-foreground text-lg">עמוד {pageNumber} לא נמצא</div>
+                      <div className="text-sm text-muted-foreground">
+                        העמוד לא נמצא במסד הנתונים או לא עובד כראוי
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                      <div className="text-muted-foreground">טוען עמוד {pageNumber}...</div>
+                    </>
+                  )}
+                  <button
+                    onClick={() => onLoadPage(pageNumber)}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                  >
+                    נסה לטעון שוב
+                  </button>
+                </div>
+              </div>
             )}
           </PDFProgressiveLoader>
         </PDFErrorBoundary>
