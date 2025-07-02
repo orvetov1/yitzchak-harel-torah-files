@@ -48,5 +48,5 @@ export default defineConfig(({ mode }) => ({
     global: 'globalThis',
   },
   // Ensure PDF worker files are served with correct MIME type
-  assetsInclude: ['**/*.worker.js', '**/*.worker.min.js']
+assetsInclude: ['**/*.mjs', '**/*.worker.mjs'] // הוסף תמיכה בקבצי mjs
 }));
