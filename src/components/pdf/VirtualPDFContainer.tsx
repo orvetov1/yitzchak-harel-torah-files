@@ -1,8 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Button } from '../ui/button';
-import { usePDFPages } from '../../hooks/usePDFPages';
-import { usePDFVirtualViewer } from '../../hooks/pdf/usePDFVirtualViewer';
+import { usePDFLargeLazyViewer } from '../../hooks/pdf/usePDFLargeLazyViewer';
 import { useKeyboardNavigation } from '../../hooks/useKeyboardNavigation';
 import { useFullscreen } from '../../hooks/useFullscreen';
 import PDFTableOfContents from '../PDFTableOfContents';
@@ -22,31 +21,27 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
 
   console.log(`🚀 VirtualPDFContainer initialized with pdfFileId: ${pdfFileId}`);
 
-  // Use the working usePDFPages hook instead of usePDFLazyLoader
-  const {
-    pages,
-    fileInfo,
-    isLoading,
-    error,
-    reload,
-    getPageUrl,
-    retryProcessing
-  } = usePDFPages(pdfFileId);
-
-  // Use virtual viewer hook for navigation and state management
+  // Use the new large lazy viewer
   const {
     currentPage,
     scale,
     visiblePages,
+    totalPages,
+    fileInfo,
+    isLoading,
+    error,
+    isPageLoaded,
+    isPageLoading,
+    isPageError,
     goToPage,
     goToPrevPage,
     goToNextPage,
     zoomIn,
-    zoomOut
-  } = usePDFVirtualViewer({
-    totalPages: fileInfo?.numPagesTotal || 0,
-    preloadDistance: 2
-  });
+    zoomOut,
+    getPageUrl,
+    retryPage,
+    reload
+  } = usePDFLargeLazyViewer(pdfFileId);
 
   // Enable keyboard navigation
   useKeyboardNavigation({
@@ -58,8 +53,8 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
 
   console.log(`📊 VirtualPDFContainer state:`, {
     currentPage,
-    totalPages: fileInfo?.numPagesTotal || 0,
-    pagesCount: pages.length,
+    totalPages,
+    visiblePagesCount: visiblePages.length,
     isLoading,
     error,
     processingStatus: fileInfo?.processingStatus
@@ -94,14 +89,12 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
           מצב עיבוד: {fileInfo?.processingStatus || 'לא ידוע'}
         </div>
         <div className="space-y-2">
-          <Button onClick={retryProcessing} className="hebrew-text mr-2">נסה לעבד שוב</Button>
+          <Button onClick={reload} className="hebrew-text mr-2">רענן</Button>
           <Button onClick={onClose} variant="outline" className="hebrew-text">סגור</Button>
         </div>
       </div>
     );
   }
-
-  const totalPages = fileInfo?.numPagesTotal || 0;
 
   return (
     <div 
@@ -140,15 +133,18 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
         <div className="flex-1 overflow-auto bg-gray-100 p-4">
           <div className="max-w-4xl mx-auto space-y-6">
             {visiblePages.map(pageNumber => {
-              // Find the page data for this page number
-              const pageData = pages.find(p => p.pageNumber === pageNumber);
-              const pageUrl = pageData ? getPageUrl(pageData) : null;
+              const pageUrl = getPageUrl(pageNumber);
               const isCurrentPage = pageNumber === currentPage;
+              const pageLoaded = isPageLoaded(pageNumber);
+              const pageLoading = isPageLoading(pageNumber);
+              const pageError = isPageError(pageNumber);
               
               console.log(`🔍 Rendering page ${pageNumber}:`, {
-                hasPageData: !!pageData,
-                pageUrl: pageUrl ? 'available' : 'null',
-                isCurrent: isCurrentPage
+                hasPageUrl: !!pageUrl,
+                isCurrent: isCurrentPage,
+                isLoaded: pageLoaded,
+                isLoading: pageLoading,
+                hasError: pageError
               });
               
               return (
@@ -159,8 +155,10 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
                   scale={scale}
                   totalPages={totalPages}
                   isCurrentPage={isCurrentPage}
-                  isPageLoading={false} // We're not using loading states since pages are pre-loaded
-                  onLoadPage={goToPage}
+                  isPageLoading={pageLoading}
+                  isPageLoaded={pageLoaded}
+                  isPageError={pageError}
+                  onLoadPage={() => retryPage(pageNumber)}
                 />
               );
             })}
@@ -171,7 +169,7 @@ const VirtualPDFContainer = ({ pdfFileId, onClose }: VirtualPDFContainerProps) =
         <VirtualPDFStatusBar
           currentPage={currentPage}
           totalPages={totalPages}
-          loadedPagesCount={pages.length}
+          loadedPagesCount={visiblePages.filter(p => isPageLoaded(p)).length}
           visiblePages={visiblePages}
           isFullscreen={isFullscreen}
         />
