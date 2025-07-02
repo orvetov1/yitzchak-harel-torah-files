@@ -11,6 +11,7 @@ export class PDFWorkerManager {
     errors: string[];
     timestamp: number;
     attempts: number;
+    lastError?: string;
   } = {
     workerSource: '',
     initialized: false,
@@ -53,25 +54,33 @@ export class PDFWorkerManager {
         throw new Error(`Worker file not accessible: ${workerResponse.status} ${workerResponse.statusText}`);
       }
       
-      // Get the actual worker content to verify it's not empty or corrupted
-      const workerContentResponse = await fetch(localWorkerUrl);
+      // Get the first part of worker content to verify it's valid
+      const workerContentResponse = await fetch(localWorkerUrl, {
+        headers: { 'Range': 'bytes=0-1023' } // Get first 1KB to check
+      });
       const workerContent = await workerContentResponse.text();
       
-      if (!workerContent || workerContent.trim().length < 100) {
-        throw new Error('Worker file appears to be empty or corrupted');
+      if (!workerContent || workerContent.trim().length < 50) {
+        throw new Error('Worker file appears to be empty or too small');
       }
       
-      if (!workerContent.includes('PDF.js') && !workerContent.includes('pdfjs')) {
-        console.warn('⚠️ Worker file may not be a valid PDF.js worker');
+      // Look for PDF.js indicators in the content
+      const hasPDFJSIndicators = workerContent.includes('PDF.js') || 
+                                 workerContent.includes('pdfjs') || 
+                                 workerContent.includes('worker') ||
+                                 workerContent.includes('function');
+      
+      if (!hasPDFJSIndicators) {
+        console.warn('⚠️ Worker file may not contain expected PDF.js code');
       }
       
-      console.log(`✅ Worker file verified (${Math.round(workerContent.length / 1024)}KB)`);
+      console.log(`✅ Worker file verified (first 1KB checked)`);
       
       // Set the worker source
       pdfjs.GlobalWorkerOptions.workerSrc = localWorkerUrl;
       this.diagnostics.workerSource = localWorkerUrl;
       
-      // Test worker functionality with a minimal PDF
+      // Test worker functionality with a simpler approach
       const success = await this.testWorker();
       if (success) {
         this.workerInitialized = true;
@@ -84,9 +93,10 @@ export class PDFWorkerManager {
         throw new Error('Worker functionality test failed');
       }
     } catch (error) {
-      const errorMsg = `Local worker failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      const errorMsg = `Worker initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
       console.error(`❌ ${errorMsg}`);
       this.diagnostics.errors.push(errorMsg);
+      this.diagnostics.lastError = errorMsg;
       return false;
     }
   }
@@ -95,46 +105,39 @@ export class PDFWorkerManager {
     try {
       console.log('🧪 Testing PDF Worker functionality...');
       
-      // Create a minimal valid PDF for testing
+      // Create a much simpler valid PDF for testing
       const testPdfData = new Uint8Array([
-        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, // %PDF-1.4
-        0x0a, 0x31, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, // \n1 0 obj
-        0x0a, 0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, // \n<</Type
-        0x2f, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, // /Catalog
-        0x2f, 0x50, 0x61, 0x67, 0x65, 0x73, 0x20, 0x32, // /Pages 2
-        0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, 0x65, //  0 R>>\ne
-        0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, 0x32, 0x20, // ndobj\n2 
-        0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, 0x3c, 0x3c, // 0 obj\n<<
-        0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x50, 0x61, // /Type/Pa
-        0x67, 0x65, 0x73, 0x2f, 0x43, 0x6f, 0x75, 0x6e, // ges/Coun
-        0x74, 0x20, 0x30, 0x3e, 0x3e, 0x0a, 0x65, 0x6e, // t 0>>\nen
-        0x64, 0x6f, 0x62, 0x6a, 0x0a, 0x78, 0x72, 0x65, // dobj\nxre
-        0x66, 0x0a, 0x30, 0x20, 0x33, 0x0a, 0x30, 0x30, // f\n0 3\n00
-        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, // 00000000
-        0x20, 0x36, 0x35, 0x35, 0x33, 0x35, 0x20, 0x66, //  65535 f
-        0x20, 0x0a, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, //  \n000000
-        0x30, 0x30, 0x30, 0x39, 0x20, 0x30, 0x30, 0x30, // 0009 000
-        0x30, 0x30, 0x20, 0x6e, 0x20, 0x0a, 0x30, 0x30, // 00 n \n00
-        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x37, 0x34, // 00000074
-        0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x6e, //  00000 n
-        0x20, 0x0a, 0x74, 0x72, 0x61, 0x69, 0x6c, 0x65, //  \ntraile
-        0x72, 0x0a, 0x3c, 0x3c, 0x2f, 0x53, 0x69, 0x7a, // r\n<</Siz
-        0x65, 0x20, 0x33, 0x2f, 0x52, 0x6f, 0x6f, 0x74, // e 3/Root
-        0x20, 0x31, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, //  1 0 R>>
-        0x0a, 0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, // \nstartxr
-        0x65, 0x66, 0x0a, 0x31, 0x31, 0x36, 0x0a, 0x25, // ef\n116\n%
-        0x25, 0x45, 0x4f, 0x46, 0x0a                    // %EOF\n
+        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34, 0x0a, // %PDF-1.4\n
+        0x31, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, // 1 0 obj\n
+        0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x43, 0x61, 0x74, 0x61, 0x6c, 0x6f, 0x67, // <</Type/Catalog
+        0x2f, 0x50, 0x61, 0x67, 0x65, 0x73, 0x20, 0x32, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, // /Pages 2 0 R>>\n
+        0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, // endobj\n
+        0x32, 0x20, 0x30, 0x20, 0x6f, 0x62, 0x6a, 0x0a, // 2 0 obj\n
+        0x3c, 0x3c, 0x2f, 0x54, 0x79, 0x70, 0x65, 0x2f, 0x50, 0x61, 0x67, 0x65, 0x73, // <</Type/Pages
+        0x2f, 0x43, 0x6f, 0x75, 0x6e, 0x74, 0x20, 0x30, 0x3e, 0x3e, 0x0a, // /Count 0>>\n
+        0x65, 0x6e, 0x64, 0x6f, 0x62, 0x6a, 0x0a, // endobj\n
+        0x78, 0x72, 0x65, 0x66, 0x0a, 0x30, 0x20, 0x33, 0x0a, // xref\n0 3\n
+        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x36, 0x35, 0x35, 0x33, 0x35, 0x20, 0x66, 0x20, 0x0a, // 0000000000 65535 f \n
+        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x39, 0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x6e, 0x20, 0x0a, // 0000000009 00000 n \n
+        0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x30, 0x37, 0x34, 0x20, 0x30, 0x30, 0x30, 0x30, 0x30, 0x20, 0x6e, 0x20, 0x0a, // 0000000074 00000 n \n
+        0x74, 0x72, 0x61, 0x69, 0x6c, 0x65, 0x72, 0x0a, // trailer\n
+        0x3c, 0x3c, 0x2f, 0x53, 0x69, 0x7a, 0x65, 0x20, 0x33, 0x2f, 0x52, 0x6f, 0x6f, 0x74, 0x20, 0x31, 0x20, 0x30, 0x20, 0x52, 0x3e, 0x3e, 0x0a, // <</Size 3/Root 1 0 R>>\n
+        0x73, 0x74, 0x61, 0x72, 0x74, 0x78, 0x72, 0x65, 0x66, 0x0a, 0x31, 0x31, 0x36, 0x0a, // startxref\n116\n
+        0x25, 0x25, 0x45, 0x4f, 0x46, 0x0a // %%EOF\n
       ]);
 
       const testPromise = pdfjs.getDocument({ 
         data: testPdfData,
         verbosity: 0,
         disableAutoFetch: true,
-        disableStream: true
+        disableStream: true,
+        useWorkerFetch: false,
+        isEvalSupported: false
       }).promise;
       
+      // Shorter timeout for quicker feedback
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Worker test timeout after 5 seconds')), 5000);
+        setTimeout(() => reject(new Error('Worker test timeout after 3 seconds')), 3000);
       });
 
       const pdfDoc = await Promise.race([testPromise, timeoutPromise]);
@@ -146,7 +149,10 @@ export class PDFWorkerManager {
         throw new Error('Invalid PDF document returned from worker test');
       }
     } catch (error) {
-      console.warn(`❌ PDF Worker functionality test FAILED: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      const errorMsg = `Worker test failed: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      console.warn(`❌ ${errorMsg}`);
+      this.diagnostics.errors.push(errorMsg);
+      this.diagnostics.lastError = errorMsg;
       return false;
     }
   }
@@ -154,7 +160,8 @@ export class PDFWorkerManager {
   getDiagnostics() {
     return { 
       ...this.diagnostics,
-      currentWorkerSrc: pdfjs.GlobalWorkerOptions.workerSrc || 'Not set'
+      currentWorkerSrc: pdfjs.GlobalWorkerOptions.workerSrc || 'Not set',
+      isReady: this.workerInitialized
     };
   }
 
@@ -164,9 +171,11 @@ export class PDFWorkerManager {
 
   getWorkerStatus(): string {
     if (this.workerInitialized) {
-      return '✅ פעיל (מקומי)';
+      return '✅ פעיל';
+    } else if (this.diagnostics.attempts > 0) {
+      return '❌ נכשל';
     } else {
-      return '❌ לא מאותחל';
+      return '⏳ לא מאותחל';
     }
   }
 
@@ -201,7 +210,7 @@ export const initializePDFWorker = async (retries = 1): Promise<boolean> => {
     }
   }
   
-  console.error('❌ PDF Worker initialization failed - local worker not available');
+  console.error('❌ PDF Worker initialization failed after all retries');
   return false;
 };
 

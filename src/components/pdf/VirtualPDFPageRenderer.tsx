@@ -6,8 +6,8 @@ import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import { Button } from '../ui/button';
-import { RefreshCw, AlertTriangle } from 'lucide-react';
-import { getPDFWorkerStatus, isPDFWorkerReady, initializePDFWorkerIfNeeded } from '../../utils/pdfWorkerLoader';
+import { RefreshCw, AlertTriangle, Download, Settings } from 'lucide-react';
+import { getPDFWorkerStatus, isPDFWorkerReady, resetPDFWorker, getPDFWorkerDiagnostics } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -46,6 +46,13 @@ const VirtualPDFPageRenderer = ({
   const getRenderMode = (url: string | null) => {
     if (!url) return 'fallback';
     if (isImageFile(url)) return 'image';
+    
+    // Check if it's a PDF file
+    const isPdfFile = /\.pdf(\?|$)/i.test(url);
+    if (isPdfFile) {
+      return isWorkerAvailable ? 'pdf' : 'worker_not_ready';
+    }
+    
     return isWorkerAvailable ? 'pdf' : 'image';
   };
 
@@ -60,6 +67,23 @@ const VirtualPDFPageRenderer = ({
     isPageError,
     workerStatus
   });
+
+  // Handle worker retry
+  const handleWorkerRetry = async () => {
+    console.log('🔄 Attempting to reset PDF Worker...');
+    await resetPDFWorker();
+    // Wait a moment for the worker to initialize
+    setTimeout(() => {
+      onLoadPage();
+    }, 1000);
+  };
+
+  // Handle direct download
+  const handleDirectDownload = () => {
+    if (pageUrl) {
+      window.open(pageUrl, '_blank');
+    }
+  };
 
   // Show error state
   if (isPageError) {
@@ -88,6 +112,64 @@ const VirtualPDFPageRenderer = ({
                 <RefreshCw size={16} className="ml-2" />
                 נסה שוב
               </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show worker not ready state
+  if (renderMode === 'worker_not_ready') {
+    const diagnostics = getPDFWorkerDiagnostics();
+    
+    return (
+      <div className="mb-6">
+        <div className="bg-white p-2 rounded-lg shadow-lg">
+          <PDFPageHeader
+            pageNumber={pageNumber}
+            totalPages={totalPages}
+            pageUrl={pageUrl}
+            isCurrentPage={isCurrentPage}
+          />
+          
+          <div className="flex items-center justify-center h-96 hebrew-text bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="text-center space-y-4 max-w-md p-6">
+              <Settings size={48} className="mx-auto text-amber-600" />
+              <div className="text-amber-700 text-lg font-medium">מנוע ה-PDF לא מוכן</div>
+              <div className="text-sm text-amber-600">
+                יש בעיה באתחול מנוע ה-PDF. זה עלול לקרות בעיקר בטעינה ראשונה.
+              </div>
+              
+              <div className="bg-amber-100 p-3 rounded border text-xs text-amber-700">
+                <div className="font-medium mb-1">מידע טכני:</div>
+                <div>מצב Worker: {workerStatus}</div>
+                <div>שגיאות: {diagnostics.errors.length}</div>
+                <div>ניסיונות: {diagnostics.attempts}</div>
+              </div>
+              
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={handleWorkerRetry}
+                  className="hebrew-text"
+                >
+                  <RefreshCw size={16} className="ml-2" />
+                  אתחל מנוע PDF מחדש
+                </Button>
+                
+                <Button
+                  onClick={handleDirectDownload}
+                  variant="outline"
+                  className="hebrew-text"
+                >
+                  <Download size={16} className="ml-2" />
+                  הורד קובץ למחשב
+                </Button>
+              </div>
+              
+              <div className="text-xs text-amber-600">
+                אם הבעיה נמשכת, נסה לרענן את הדף או להוריד את הקובץ
+              </div>
             </div>
           </div>
         </div>

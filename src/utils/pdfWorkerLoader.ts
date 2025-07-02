@@ -7,23 +7,30 @@ let isInitialized = false;
 let hasFailed = false;
 
 // Initialize worker only when explicitly requested
-const initWorker = async (): Promise<boolean> => {
-  if (hasFailed) {
-    console.log('🚫 PDF Worker previously failed, not retrying');
+const initWorker = async (forceRetry = false): Promise<boolean> => {
+  if (hasFailed && !forceRetry) {
+    console.log('🚫 PDF Worker previously failed, use forceRetry to retry');
     return false;
   }
 
-  if (isInitialized) {
+  if (isInitialized && !forceRetry) {
     console.log('✅ PDF Worker already initialized');
     return true;
   }
 
-  if (initializationPromise) {
+  if (initializationPromise && !forceRetry) {
     console.log('🔄 PDF Worker initialization already in progress...');
     return initializationPromise;
   }
 
   console.log('🚀 Starting PDF worker initialization (on-demand)...');
+  
+  // Reset state if forcing retry
+  if (forceRetry) {
+    isInitialized = false;
+    hasFailed = false;
+    initializationPromise = null;
+  }
   
   initializationPromise = initializePDFWorker(1);
   
@@ -33,11 +40,13 @@ const initWorker = async (): Promise<boolean> => {
     if (success) {
       console.log('✅ PDF worker initialized successfully');
       isInitialized = true;
+      hasFailed = false;
       const manager = PDFWorkerManager.getInstance();
       console.log('📊 Worker Status:', manager.getWorkerStatus());
     } else {
       console.error('❌ PDF worker initialization failed');
       hasFailed = true;
+      isInitialized = false;
       const manager = PDFWorkerManager.getInstance();
       console.log('🔍 Diagnostics:', manager.getDiagnostics());
     }
@@ -47,6 +56,7 @@ const initWorker = async (): Promise<boolean> => {
     console.error('💥 PDF Worker initialization error:', error);
     initializationPromise = null;
     hasFailed = true;
+    isInitialized = false;
     return false;
   }
 };
@@ -88,7 +98,7 @@ export const resetPDFWorker = async (): Promise<boolean> => {
   isInitialized = false;
   hasFailed = false;
   manager.reset();
-  return await initWorker();
+  return await initWorker(true); // Force retry
 };
 
 export const waitForPDFWorker = async (timeoutMs = 10000): Promise<boolean> => {
