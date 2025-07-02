@@ -49,3 +49,8 @@ export interface PDFPerformanceMetrics {
   success: boolean;
   errorType?: string;
 }
+
+export interface PDFPageData {
+  file_path: string;
+  page_number: number;
+}

@@ -39,14 +39,11 @@ export class PDFWorkerManager {
     this.diagnostics.timestamp = startTime;
     this.diagnostics.fallbackMode = false;
 
-    // Try local worker first (best performance, no network dependency)
+    // Prioritize local worker (no CORS issues)
     const workerSources = [
-      '/pdf.worker.min.js', // Local file - highest priority
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
-      `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`,
-      `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`,
-      // Generic fallback
-      `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`
+      `${window.location.origin}/pdf.worker.min.js`, // Local file - highest priority
+      '/pdf.worker.min.js', // Relative path fallback
+      `https://cdn.jsdelivr.net/npm/pdfjs-dist/build/pdf.worker.min.js`, // Generic CDN fallback
     ];
 
     for (let i = 0; i < workerSources.length; i++) {
@@ -54,15 +51,19 @@ export class PDFWorkerManager {
       console.log(`🔧 Trying PDF worker source ${i + 1}/${workerSources.length}: ${workerSrc}`);
       
       try {
-        // Test if worker source is available
-        if (workerSrc.startsWith('http')) {
+        // For local files, skip the network check
+        if (!workerSrc.startsWith('http') || workerSrc.includes(window.location.origin)) {
+          console.log(`📁 Using local worker file: ${workerSrc}`);
+        } else {
+          // Test if external worker source is available
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+          const timeoutId = setTimeout(() => controller.abort(), 3000); // Reduced timeout
           
           try {
             const response = await fetch(workerSrc, { 
               method: 'HEAD',
-              signal: controller.signal
+              signal: controller.signal,
+              mode: 'cors'
             });
             clearTimeout(timeoutId);
             
@@ -108,7 +109,7 @@ export class PDFWorkerManager {
     return false;
   }
 
-  private async testWorker(timeoutMs = 3000): Promise<boolean> {
+  private async testWorker(timeoutMs = 2000): Promise<boolean> {
     try {
       // Create a minimal test PDF data
       const testPdfData = new Uint8Array([

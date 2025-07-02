@@ -1,5 +1,7 @@
+
 import { useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { PDFPageData } from '@/types/pdfViewer';
 
 export const usePDFPageDataLoader = (pdfFileId: string) => {
   const loadSplitPage = useCallback(async (pageNumber: number): Promise<PDFPageData | null> => {
@@ -121,11 +123,7 @@ export const usePDFPageDataLoader = (pdfFileId: string) => {
       // Use Supabase storage public URL with proper CORS handling
       const { data } = supabase.storage
         .from('pdf-files')
-        .getPublicUrl(filePath, {
-          transform: {
-            quality: 80
-          }
-        });
+        .getPublicUrl(filePath);
 
       if (!data.publicUrl) {
         throw new Error(`Failed to get public URL for: ${filePath}`);
