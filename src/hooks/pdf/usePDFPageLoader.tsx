@@ -14,14 +14,16 @@ export const usePDFPageLoader = (pdfFileId: string) => {
   });
 
   const abortControllersRef = useRef<Map<number, AbortController>>(new Map());
+  const retryCountRef = useRef<Map<number, number>>(new Map());
 
   const loadPageData = useCallback(async (
     pageNumber: number,
     cacheRef: React.MutableRefObject<Map<number, string>>,
     maxCachedPages: number,
-    setPageUrl: (pageNumber: number, url: string) => void
+    setPageUrl: (pageNumber: number, url: string) => void,
+    maxRetries: number = 3
   ): Promise<string | null> => {
-    console.log(`🔄 loadPageData called for page ${pageNumber}`);
+    console.log(`🔄 loadPageData called for page ${pageNumber}, pdfFileId: ${pdfFileId}`);
     
     // Check if already cached
     if (cacheRef.current.has(pageNumber)) {
@@ -36,14 +38,34 @@ export const usePDFPageLoader = (pdfFileId: string) => {
       return null;
     }
 
+    // Check retry count
+    const currentRetries = retryCountRef.current.get(pageNumber) || 0;
+    if (currentRetries >= maxRetries) {
+      console.log(`❌ Page ${pageNumber} exceeded max retries (${maxRetries})`);
+      return null;
+    }
+
     try {
-      console.log(`🚀 Starting to load page ${pageNumber}`);
+      console.log(`🚀 Starting to load page ${pageNumber} (attempt ${currentRetries + 1}/${maxRetries})`);
+      
+      // Cancel any existing request for this page
+      const existingController = abortControllersRef.current.get(pageNumber);
+      if (existingController) {
+        existingController.abort();
+      }
+
+      // Create new abort controller
+      const abortController = new AbortController();
+      abortControllersRef.current.set(pageNumber, abortController);
+
       setState(prev => ({
         ...prev,
-        loadingPages: new Set([...prev.loadingPages, pageNumber])
+        loadingPages: new Set([...prev.loadingPages, pageNumber]),
+        error: null
       }));
 
       // First, try to get from split pages
+      console.log(`🔍 Checking for split page ${pageNumber} in pdfFileId: ${pdfFileId}`);
       const { data: pageData, error: pageError } = await supabase
         .from('pdf_pages')
         .select('file_path')
@@ -51,10 +73,14 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         .eq('page_number', pageNumber)
         .maybeSingle();
 
+      if (pageError) {
+        console.error(`❌ Error querying split pages for page ${pageNumber}:`, pageError);
+      }
+
       let blobUrl: string;
 
       if (pageData && !pageError) {
-        console.log(`📄 Loading split page ${pageNumber} from:`, pageData.file_path);
+        console.log(`📄 Found split page ${pageNumber} at:`, pageData.file_path);
         
         // Check if it's an image file (PNG/JPG)
         const isImageFile = pageData.file_path.match(/\.(png|jpg|jpeg|gif|webp)$/i);
@@ -75,23 +101,34 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           try {
             const { data: fileData, error: downloadError } = await supabase.storage
               .from('pdf-files')
-              .download(pageData.file_path);
+              .download(pageData.file_path, {
+                signal: abortController.signal
+              });
 
             if (downloadError || !fileData) {
               throw new Error(`Failed to download page ${pageNumber}: ${downloadError?.message}`);
             }
 
+            // Verify the file is not empty
+            if (fileData.size === 0) {
+              throw new Error(`Downloaded file for page ${pageNumber} is empty`);
+            }
+
             blobUrl = URL.createObjectURL(fileData);
-            console.log(`✅ PDF blob URL for page ${pageNumber}: ${blobUrl}`);
+            console.log(`✅ PDF blob URL for page ${pageNumber}: ${blobUrl}, size: ${fileData.size} bytes`);
             
           } catch (downloadError) {
+            if (downloadError.name === 'AbortError') {
+              console.log(`🚫 Download aborted for page ${pageNumber}`);
+              return null;
+            }
             console.error(`❌ PDF download failed for page ${pageNumber}:`, downloadError);
             throw downloadError;
           }
         }
         
       } else {
-        console.log(`📄 No split page found for page ${pageNumber}, using main PDF`);
+        console.log(`📄 No split page found for page ${pageNumber}, trying main PDF`);
         
         // Fallback to main PDF file
         const { data: pdfFile, error: pdfError } = await supabase
@@ -101,23 +138,34 @@ export const usePDFPageLoader = (pdfFileId: string) => {
           .single();
 
         if (pdfError || !pdfFile) {
-          throw new Error('PDF file not found');
+          throw new Error(`PDF file not found: ${pdfError?.message}`);
         }
 
         try {
           // Download main PDF and create blob URL
           const { data: fileData, error: downloadError } = await supabase.storage
             .from('pdf-files')
-            .download(pdfFile.file_path);
+            .download(pdfFile.file_path, {
+              signal: abortController.signal
+            });
 
           if (downloadError || !fileData) {
             throw new Error(`Failed to download main PDF: ${downloadError?.message}`);
           }
 
+          // Verify the file is not empty
+          if (fileData.size === 0) {
+            throw new Error(`Main PDF file is empty`);
+          }
+
           blobUrl = URL.createObjectURL(fileData);
-          console.log(`✅ Main PDF blob URL for page ${pageNumber}: ${blobUrl}`);
+          console.log(`✅ Main PDF blob URL for page ${pageNumber}: ${blobUrl}, size: ${fileData.size} bytes`);
           
         } catch (downloadError) {
+          if (downloadError.name === 'AbortError') {
+            console.log(`🚫 Main PDF download aborted for page ${pageNumber}`);
+            return null;
+          }
           console.error(`❌ Main PDF download failed:`, downloadError);
           throw downloadError;
         }
@@ -138,17 +186,39 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         cacheRef.current.delete(oldestPage);
       }
 
+      // Reset retry count on success
+      retryCountRef.current.delete(pageNumber);
+
       setState(prev => ({
         ...prev,
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber)),
         error: null
       }));
 
+      // Clean up abort controller
+      abortControllersRef.current.delete(pageNumber);
+
       console.log(`✅ Page ${pageNumber} successfully loaded and cached: ${blobUrl}`);
       return blobUrl;
 
     } catch (error) {
-      console.error(`❌ Failed to load page ${pageNumber}:`, error);
+      // Clean up abort controller
+      abortControllersRef.current.delete(pageNumber);
+
+      if (error.name === 'AbortError') {
+        console.log(`🚫 Page ${pageNumber} load was aborted`);
+        setState(prev => ({
+          ...prev,
+          loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
+        }));
+        return null;
+      }
+
+      console.error(`❌ Failed to load page ${pageNumber} (attempt ${currentRetries + 1}):`, error);
+      
+      // Increment retry count
+      retryCountRef.current.set(pageNumber, currentRetries + 1);
+      
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       
       setState(prev => ({
@@ -156,14 +226,30 @@ export const usePDFPageLoader = (pdfFileId: string) => {
         error: `Failed to load page ${pageNumber}: ${errorMessage}`,
         loadingPages: new Set([...prev.loadingPages].filter(p => p !== pageNumber))
       }));
+
+      // If we haven't exceeded max retries, try again after a delay
+      if (currentRetries < maxRetries - 1) {
+        const delay = Math.min(1000 * Math.pow(2, currentRetries), 5000); // Exponential backoff, max 5s
+        console.log(`🔄 Retrying page ${pageNumber} in ${delay}ms...`);
+        setTimeout(() => {
+          loadPageData(pageNumber, cacheRef, maxCachedPages, setPageUrl, maxRetries);
+        }, delay);
+      }
+
       return null;
     }
   }, [pdfFileId, state.loadingPages]);
 
   const cleanup = useCallback(() => {
     // Abort all ongoing requests
-    abortControllersRef.current.forEach(controller => controller.abort());
+    abortControllersRef.current.forEach((controller, pageNumber) => {
+      console.log(`🚫 Aborting request for page ${pageNumber}`);
+      controller.abort();
+    });
     abortControllersRef.current.clear();
+    
+    // Clear retry counts
+    retryCountRef.current.clear();
     
     console.log(`🧹 usePDFPageLoader cleanup completed`);
   }, []);
