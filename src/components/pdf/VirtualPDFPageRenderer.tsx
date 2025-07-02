@@ -6,7 +6,7 @@ import PDFImageRenderer from './renderers/PDFImageRenderer';
 import PDFDocumentRenderer from './renderers/PDFDocumentRenderer';
 import PDFPageHeader from './renderers/PDFPageHeader';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
-import '../../utils/pdfWorkerLoader';
+import { getPDFWorkerStatus } from '../../utils/pdfWorkerLoader';
 
 interface VirtualPDFPageRendererProps {
   pageNumber: number;
@@ -37,8 +37,9 @@ const VirtualPDFPageRenderer = ({
   const workerManager = PDFWorkerManager.getInstance();
   const isWorkerAvailable = workerManager.isInitialized();
   const isFallbackMode = workerManager.isFallbackMode();
+  const workerStatus = getPDFWorkerStatus();
 
-  // Enhanced render mode logic
+  // Enhanced render mode logic with better fallbacks
   const getRenderMode = (url: string | null) => {
     if (!url) {
       console.log(`📄 Page ${pageNumber}: No URL available, using fallback mode`);
@@ -53,11 +54,11 @@ const VirtualPDFPageRenderer = ({
     
     // For PDF files, check worker availability
     if (!isWorkerAvailable || isFallbackMode) {
-      console.log(`📄 Page ${pageNumber}: PDF Worker not available (initialized: ${isWorkerAvailable}, fallback: ${isFallbackMode}), trying Image Renderer as fallback`);
+      console.log(`📄 Page ${pageNumber}: PDF Worker not available (status: ${workerStatus}), using Image Renderer as fallback`);
       return 'image'; // Try image renderer as fallback for PDFs too
     }
     
-    console.log(`📄 Page ${pageNumber}: PDF Worker available, using PDF Document Renderer`);
+    console.log(`📄 Page ${pageNumber}: PDF Worker available (status: ${workerStatus}), using PDF Document Renderer`);
     return 'pdf';
   };
 
@@ -69,10 +70,11 @@ const VirtualPDFPageRenderer = ({
     renderMode,
     isCurrentPage,
     isPageLoading,
-    workerStatus: {
+    workerStatus,
+    workerDiagnostics: {
       initialized: isWorkerAvailable,
       fallbackMode: isFallbackMode,
-      diagnostics: workerManager.getDiagnostics()
+      errors: workerManager.getDiagnostics().errors.slice(-2) // Last 2 errors
     }
   });
 
@@ -117,11 +119,20 @@ const VirtualPDFPageRenderer = ({
                   />
                 ) : (
                   <div className="flex items-center justify-center h-96 hebrew-text bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="text-center space-y-4">
-                      <div className="text-muted-foreground">עמוד {pageNumber} לא זמין</div>
+                    <div className="text-center space-y-4 max-w-md p-6">
+                      <div className="text-muted-foreground text-lg">עמוד {pageNumber} לא זמין</div>
+                      <div className="text-xs text-muted-foreground bg-yellow-50 p-3 rounded border">
+                        <div className="font-medium mb-1">מידע טכני:</div>
+                        <div>מצב Worker: {workerStatus}</div>
+                        {workerManager.getDiagnostics().errors.length > 0 && (
+                          <div className="mt-2 text-red-600">
+                            שגיאה אחרונה: {workerManager.getDiagnostics().errors.slice(-1)[0]}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => onLoadPage(pageNumber)}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
                       >
                         נסה לטעון שוב
                       </button>

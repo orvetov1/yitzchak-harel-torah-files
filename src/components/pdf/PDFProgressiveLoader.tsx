@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
-import { RefreshCw, Image, FileText, AlertTriangle } from 'lucide-react';
+import { RefreshCw, Image, FileText, AlertTriangle, Settings } from 'lucide-react';
 import PDFWorkerManager from '../../utils/pdfWorkerConfig';
+import { getPDFWorkerStatus, resetPDFWorker } from '../../utils/pdfWorkerLoader';
 
 interface PDFProgressiveLoaderProps {
   pageNumber: number;
@@ -24,11 +25,28 @@ const PDFProgressiveLoader = ({
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [lastError, setLastError] = useState<string | null>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
+  const [isResettingWorker, setIsResettingWorker] = useState(false);
 
   const handleRetry = () => {
     setLoadAttempts(prev => prev + 1);
     setLastError(null);
     onRetry();
+  };
+
+  const handleResetWorker = async () => {
+    setIsResettingWorker(true);
+    try {
+      console.log('🔄 Resetting PDF Worker from user action...');
+      await resetPDFWorker();
+      setLoadAttempts(0);
+      setLastError(null);
+      onRetry();
+    } catch (error) {
+      console.error('Failed to reset PDF Worker:', error);
+      setLastError('Failed to reset PDF Worker');
+    } finally {
+      setIsResettingWorker(false);
+    }
   };
 
   const handleError = (error: string) => {
@@ -46,6 +64,7 @@ const PDFProgressiveLoader = ({
   // Get worker diagnostics
   const workerManager = PDFWorkerManager.getInstance();
   const diagnostics = workerManager.getDiagnostics();
+  const workerStatus = getPDFWorkerStatus();
 
   // Show loading state
   if (isLoading) {
@@ -82,16 +101,31 @@ const PDFProgressiveLoader = ({
           </div>
           
           <div className="space-y-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleRetry}
-              className="hebrew-text"
-              disabled={loadAttempts >= 3}
-            >
-              <RefreshCw size={16} className="ml-2" />
-              {loadAttempts >= 3 ? 'מקסימום נסיונות' : 'נסה שוב'}
-            </Button>
+            <div className="flex gap-2 justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRetry}
+                className="hebrew-text"
+                disabled={loadAttempts >= 5}
+              >
+                <RefreshCw size={16} className="ml-2" />
+                {loadAttempts >= 5 ? 'מקסימום נסיונות' : 'נסה שוב'}
+              </Button>
+              
+              {loadAttempts >= 2 && !workerManager.isInitialized() && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleResetWorker}
+                  disabled={isResettingWorker}
+                  className="hebrew-text"
+                >
+                  <Settings size={16} className="ml-2" />
+                  {isResettingWorker ? 'מאתחל...' : 'אתחל Worker'}
+                </Button>
+              )}
+            </div>
             
             {loadAttempts >= 2 && (
               <div className="space-y-2">
@@ -105,16 +139,22 @@ const PDFProgressiveLoader = ({
                 </Button>
                 
                 {showDiagnostics && (
-                  <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded max-w-sm">
-                    <div className="font-medium mb-2">מצב PDF Worker:</div>
+                  <div className="text-xs text-muted-foreground bg-gray-50 p-3 rounded max-w-sm text-right">
+                    <div className="font-medium mb-2">אבחון PDF Worker:</div>
+                    <div>• מצב: {workerStatus}</div>
                     <div>• מאותחל: {diagnostics.initialized ? 'כן' : 'לא'}</div>
                     <div>• מצב חלופי: {diagnostics.fallbackMode ? 'כן' : 'לא'}</div>
-                    <div>• מקור: {diagnostics.workerSource || 'לא זמין'}</div>
+                    <div>• נסיונות: {diagnostics.attempts}</div>
+                    {diagnostics.workerSource && (
+                      <div>• מקור: {diagnostics.workerSource.substring(0, 30)}...</div>
+                    )}
                     {diagnostics.errors.length > 0 && (
                       <div className="mt-2">
-                        <div className="font-medium">שגיאות:</div>
+                        <div className="font-medium">שגיאות אחרונות:</div>
                         {diagnostics.errors.slice(-2).map((error, i) => (
-                          <div key={i} className="text-red-600">• {error}</div>
+                          <div key={i} className="text-red-600 text-xs break-words">
+                            • {error.substring(0, 50)}...
+                          </div>
                         ))}
                       </div>
                     )}
