@@ -30,6 +30,12 @@ export default defineConfig(({ mode }) => ({
   build: {
     rollupOptions: {
       output: {
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name === 'pdf.worker.mjs') {
+            return 'pdf.worker.mjs';
+          }
+          return 'assets/[name]-[hash][extname]';
+        }
         manualChunks: {
           'pdfjs': ['pdfjs-dist', 'react-pdf']
         }
