@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/toaster';
 import { pdfjs } from 'react-pdf';
 const BASE_URL = window.location.origin;
-pdfjs.GlobalWorkerOptions.workerSrc = `${BASE_URL}/pdf.worker.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = `${BASE_URL}/pdf.worker.min.js`;
 import App from './App.tsx';
 import './index.css';
 

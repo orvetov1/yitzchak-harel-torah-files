@@ -31,11 +31,11 @@ export default defineConfig(({ mode }) => ({
     rollupOptions: {
       output: {
         assetFileNames: (assetInfo) => {
-          if (assetInfo.name === 'pdf.worker.mjs') {
-            return 'pdf.worker.mjs';
+          if (assetInfo.name === 'pdf.worker.min.js') {
+            return 'pdf.worker.min.js';
           }
           return 'assets/[name]-[hash][extname]';
-        }
+        },
         manualChunks: {
           'pdfjs': ['pdfjs-dist', 'react-pdf']
         }
